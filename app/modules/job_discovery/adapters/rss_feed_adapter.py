@@ -5,7 +5,7 @@ onboarded for HTML scraping."""
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 
 import feedparser
 import httpx
@@ -35,8 +35,11 @@ class RssFeedAdapter(JobSourceAdapter):
         for entry in parsed.entries:
             published = getattr(entry, "published_parsed", None)
             if since is not None and published is not None:
-                entry_dt = datetime(*published[:6])
-                if entry_dt <= since:
+                # feedparser's struct_time is UTC; `since` comes from a
+                # timezone-aware column, so compare both as aware datetimes
+                entry_dt = datetime(*published[:6], tzinfo=UTC)
+                since_aware = since if since.tzinfo else since.replace(tzinfo=UTC)
+                if entry_dt <= since_aware:
                     continue
 
             external_id = getattr(entry, "id", None) or getattr(entry, "link", None)

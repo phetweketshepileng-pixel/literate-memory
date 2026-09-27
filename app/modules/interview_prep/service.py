@@ -7,6 +7,7 @@ feedback on top without this module depending on it.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from app.modules.career_transition.service import get_mappings_for_pathway
@@ -80,12 +81,33 @@ def select_behavioral_questions(
 
 # ===================== STAR structure scoring (deterministic) =====================
 
-_SITUATION_MARKERS = ("when", "at my previous", "in my role", "while working", "during", "at the time")
-_TASK_MARKERS = ("needed to", "had to", "was responsible for", "my task", "the goal was", "i was asked")
+_SITUATION_MARKERS = ("when", "at my previous", "in my role", "while working", "during", "at the time",
+                      "at my last", "in my previous", "last year", "previously", "there was a time", "i was working",
+                      "our team was", "we were")
+_TASK_MARKERS = ("needed to", "had to", "was responsible for", "my task", "the goal was", "i was asked",
+                 "i was tasked", "my job was", "my role was", "the challenge was", "my goal", "the objective",
+                 "i needed", "we needed", "the target was")
 _ACTION_MARKERS = ("i decided", "i implemented", "i led", "i created", "i built", "i reached out",
                    "i worked with", "i developed", "i organized", "i analyzed")
 _RESULT_MARKERS = ("as a result", "this led to", "the outcome", "ultimately", "we achieved",
-                    "resulted in", "improved", "reduced", "increased")
+                    "resulted in", "improved", "reduced", "increased", "achieved", "exceeded", "we hit",
+                    "i hit", "saved", "grew", "rose", "which meant", "so that", "in the end")
+
+# Candidates are coached to answer "Situation: ... Task: ... Action: ... Result: ...",
+# so explicit labels count as the component being present.
+_LABEL = r"(?:^|[\s.;,(])(?:{})\s*[:\-\u2013\u2014]"
+_SITUATION_LABEL = re.compile(_LABEL.format("situation|context|background"), re.IGNORECASE)
+_TASK_LABEL = re.compile(_LABEL.format("task|goal|challenge|objective"), re.IGNORECASE)
+_ACTION_LABEL = re.compile(_LABEL.format("action|actions|approach"), re.IGNORECASE)
+_RESULT_LABEL = re.compile(_LABEL.format("result|results|outcome|impact"), re.IGNORECASE)
+# first-person past-tense verbs ("I mapped", "I set up", "I then called") read as actions
+_ACTION_VERB = re.compile(
+    r"\bi (?:then |also |quickly |personally |first )?(?:\w{3,}ed|set up|set|led|built|made|ran|met|took|wrote|"
+    r"drove|spoke|sat|gave|began|chose|brought|sought|put|got|found|went|told|sent|held|ran|did)\b",
+    re.IGNORECASE,
+)
+# a number with % or a currency is almost always a result
+_METRIC = re.compile(r"\d+(?:[.,]\d+)?\s?%|\b(?:r|\$|£|€)\s?\d", re.IGNORECASE)
 
 MIN_ANSWER_LENGTH_CHARS = 80
 
@@ -107,10 +129,18 @@ def score_star_structure(answer_text: str) -> StarScore:
     regardless of what phrases it contains)."""
     text_lower = answer_text.lower()
 
-    has_situation = any(marker in text_lower for marker in _SITUATION_MARKERS)
-    has_task = any(marker in text_lower for marker in _TASK_MARKERS)
-    has_action = any(marker in text_lower for marker in _ACTION_MARKERS)
-    has_result = any(marker in text_lower for marker in _RESULT_MARKERS)
+    has_situation = any(m in text_lower for m in _SITUATION_MARKERS) or bool(_SITUATION_LABEL.search(answer_text))
+    has_task = any(m in text_lower for m in _TASK_MARKERS) or bool(_TASK_LABEL.search(answer_text))
+    has_action = (
+        any(m in text_lower for m in _ACTION_MARKERS)
+        or bool(_ACTION_LABEL.search(answer_text))
+        or bool(_ACTION_VERB.search(answer_text))
+    )
+    has_result = (
+        any(m in text_lower for m in _RESULT_MARKERS)
+        or bool(_RESULT_LABEL.search(answer_text))
+        or bool(_METRIC.search(answer_text))
+    )
     length_adequate = len(answer_text.strip()) >= MIN_ANSWER_LENGTH_CHARS
 
     components_present = sum([has_situation, has_task, has_action, has_result])

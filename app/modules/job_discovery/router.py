@@ -5,7 +5,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -31,7 +31,7 @@ async def search_jobs(
 ):
     query = select(Job).where(Job.is_active.is_(True))
     if title:
-        query = query.where(Job.title.ilike(f"%{title}%"))
+        query = query.where(or_(Job.title.ilike(f"%{title}%"), Job.company.ilike(f"%{title}%")))
     if location:
         query = query.where(Job.location.ilike(f"%{location}%"))
     if remote is not None:
@@ -46,7 +46,12 @@ async def search_jobs(
         # until a normalized `jobs.industry` column lands (see roadmap).
         query = query.where(Job.description.ilike(f"%{industry}%"))
 
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
+    query = (
+        query.order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     jobs = (await db.execute(query)).scalars().all()
 
     profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one()
@@ -76,7 +81,7 @@ async def search_jobs(
 
     return {
         "data": [_job_summary(job, match_by_job.get(job.id, 0)) for job in ordered_jobs],
-        "meta": {"page": page, "page_size": page_size, "total": len(ordered_jobs)},
+        "meta": {"page": page, "page_size": page_size, "total": total},
         "error": None,
     }
 

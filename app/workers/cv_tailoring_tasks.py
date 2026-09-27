@@ -84,9 +84,14 @@ async def _tailor_cv_async(profile_id: str, job_id: str, variant: str) -> dict:
         ).scalars().all()
         master_cv = (
             await db.execute(
-                select(Document).where(
-                    Document.profile_id == profile_id, Document.document_type == "master_cv"
+                select(Document)
+                .where(
+                    Document.profile_id == profile_id,
+                    Document.document_type == "master_cv",
+                    Document.deleted_at.is_(None),
                 )
+                .order_by(Document.created_at.desc())
+                .limit(1)
             )
         ).scalar_one_or_none()
         master_cv_text = master_cv.parsed_text if master_cv else None

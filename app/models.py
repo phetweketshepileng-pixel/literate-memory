@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -244,6 +245,20 @@ class Document(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     profile: Mapped["Profile"] = relationship(back_populates="documents")
+
+
+class DocumentBlob(Base):
+    """File bytes for uploaded documents, keyed by Document.storage_path.
+    Stands in for the object-storage bucket described in
+    ai-job-hunter-db-schema-v1.1.md section 3 until one is provisioned —
+    the storage_path contract is unchanged, so moving the bytes to S3 later
+    only touches app/core/storage.py."""
+    __tablename__ = "document_blobs"
+
+    storage_path: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CareerTrack(Base):

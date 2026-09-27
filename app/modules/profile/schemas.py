@@ -69,6 +69,8 @@ class ProfileUpdate(BaseModel):
 class ProfileOut(BaseModel):
     id: UUID
     full_name: str | None
+    phone: str | None = None
+    linkedin_url: str | None = None
     current_role: str | None
     years_experience: int | None
     industry: str | None
@@ -76,6 +78,9 @@ class ProfileOut(BaseModel):
     salary_expectation_min: int | None
     salary_expectation_max: int | None
     work_mode_preference: str | None
+    salary_currency: str | None = None
+    location_preferences: list[str] | None = None
+    career_transition_target: str | None = None
     profile_completion_score: int
 
     model_config = {"from_attributes": True}
