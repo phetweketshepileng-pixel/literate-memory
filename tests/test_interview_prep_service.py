@@ -160,3 +160,16 @@ def test_session_readiness_deduplicates_weak_competencies():
     ]
     readiness = compute_session_readiness(results)
     assert readiness["weak_competencies"] == ["stakeholder management"]
+
+
+def test_star_explicit_labels_count_as_components():
+    answer = ("Situation: two managers needed my team. Task: balance both targets. "
+              "Action: I mapped the impact and agreed a split. Result: both KPIs hit.")
+    assert identify_missing_star_components(score_star_structure(answer)) == []
+
+
+def test_star_metric_counts_as_result_and_past_tense_as_action():
+    answer = ("At my last job our team was behind target. I needed to cut the backlog. "
+              "I set up a daily huddle. Arrears dropped 18% in two months.")
+    result = score_star_structure(answer)
+    assert result.has_action and result.has_result and result.score == 100

@@ -1,0 +1,322 @@
+<div id="toast"></div>
+
+<!-- ================= AUTH ================= -->
+<div class="auth-wrap" id="authView" style="display:none;">
+  <div class="auth-side">
+    <h1>Ascend</h1>
+    <p>Your AI career operating system — profile, job discovery, match scoring, CV tailoring, application tracking and career transition in one place.</p>
+  </div>
+  <div class="auth-main">
+    <div class="auth-card">
+      <h2 id="authTitle">Welcome back</h2>
+      <div class="muted small" id="authSub">Sign in to continue.</div>
+      <div class="auth-tabs">
+        <button type="button" id="tabLogin" class="active">Sign in</button>
+        <button type="button" id="tabRegister">Create account</button>
+      </div>
+      <form id="authForm">
+        <label class="field-label">Email</label>
+        <input type="email" id="authEmail" autocomplete="email" required>
+        <label class="field-label">Password</label>
+        <input type="password" id="authPassword" autocomplete="current-password" required minlength="8">
+        <div class="small muted" id="pwHint" style="display:none; margin-top:6px;">At least 8 characters.</div>
+        <button class="btn btn-primary" style="width:100%; margin-top:18px;" id="authSubmit" type="submit">Sign in</button>
+      </form>
+      <div class="note warn" id="authError" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div class="shell" id="appView" style="display:none;">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">Ascend</div>
+      <div class="brand-sub">AI Career Operating System</div>
+    </div>
+    <nav class="nav-group">
+      <button class="nav-item active" data-screen="dashboard">◆ Dashboard</button>
+      <button class="nav-item" data-screen="profile">◆ My Profile</button>
+      <button class="nav-item" data-screen="jobs">◆ Job Search</button>
+      <button class="nav-item" data-screen="applications">◆ Applications</button>
+      <button class="nav-item" data-screen="analytics">◆ Analytics</button>
+    </nav>
+    <div class="nav-group">
+      <div class="nav-label">Career Growth</div>
+      <button class="nav-item" data-screen="transition">◆ Career Transition</button>
+      <button class="nav-item" data-screen="interview">◆ Interview Prep</button>
+      <button class="nav-item" data-screen="branding">◆ Professional Brand</button>
+      <button class="nav-item" data-screen="intelligence">◆ Recruiter Intelligence</button>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item" data-screen="settings">◆ Settings</button>
+    </div>
+    <div class="sidebar-foot">
+      <button class="profile-chip" id="identityChip" style="background:none; border:none; width:100%; text-align:left; padding:0;">
+        <div class="avatar" id="avatarInitials">?</div>
+        <div style="min-width:0;">
+          <div class="profile-chip-name" id="sidebarName">Set your name</div>
+          <div class="profile-chip-role" id="sidebarRole">&nbsp;</div>
+        </div>
+      </button>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+        <h1 id="screenTitle">Dashboard</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <section class="screen active" id="screen-dashboard">
+        <div class="panel" style="margin-bottom:18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div class="section-title" style="margin:0;">Profile completion</div>
+            <span class="small muted" id="dashCompletionPct">—</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="dashCompletionBar" style="width:0%;"></div></div>
+          <div class="small muted" id="dashMissing" style="margin-top:8px;"></div>
+        </div>
+        <div class="grid-3">
+          <div class="panel">
+            <div class="section-title">Top Matches</div>
+            <div id="dashMatches"></div>
+            <button class="btn btn-ghost btn-sm" data-nav="jobs" style="margin-top:8px;">Find jobs</button>
+          </div>
+          <div class="panel">
+            <div class="section-title">Pipeline Snapshot</div>
+            <div id="dashPipeline"></div>
+            <button class="btn btn-ghost btn-sm" data-nav="applications" style="margin-top:8px;">Open pipeline</button>
+          </div>
+          <div class="panel">
+            <div class="section-title">Last 30 days</div>
+            <div id="dashWeek"></div>
+            <button class="btn btn-ghost btn-sm" data-nav="analytics" style="margin-top:8px;">Full analytics</button>
+          </div>
+        </div>
+        <div id="dashGem"></div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="screen" id="screen-profile">
+        <div class="grid-2">
+          <div class="panel">
+            <div class="section-title">Basic details</div>
+            <form id="profileForm">
+              <div class="form-grid">
+                <div><label class="field-label">Full name</label><input type="text" name="full_name"></div>
+                <div><label class="field-label">Phone</label><input type="text" name="phone"></div>
+                <div><label class="field-label">Current role</label><input type="text" name="current_role" placeholder="e.g. Collections Team Leader"></div>
+                <div><label class="field-label">Years of experience</label><input type="number" name="years_experience" min="0" max="60"></div>
+                <div><label class="field-label">Industry</label><input type="text" name="industry" placeholder="e.g. Banking"></div>
+                <div><label class="field-label">LinkedIn URL</label><input type="text" name="linkedin_url"></div>
+                <div><label class="field-label">Desired roles (comma-separated)</label><input type="text" name="desired_roles" placeholder="Business Analyst, Systems Analyst"></div>
+                <div><label class="field-label">Preferred locations (comma-separated)</label><input type="text" name="location_preferences" placeholder="Johannesburg, Remote"></div>
+                <div><label class="field-label">Salary expectation — min</label><input type="number" name="salary_expectation_min" min="0" step="1000"></div>
+                <div><label class="field-label">Salary expectation — max</label><input type="number" name="salary_expectation_max" min="0" step="1000"></div>
+                <div><label class="field-label">Currency</label><input type="text" name="salary_currency" placeholder="ZAR" maxlength="3"></div>
+                <div><label class="field-label">Work mode</label>
+                  <select name="work_mode_preference"><option value="">—</option><option value="onsite">Onsite</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></div>
+              </div>
+              <label class="field-label">Career transition target</label>
+              <select name="career_transition_target" id="profileTarget"><option value="">—</option></select>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:16px;">Save profile</button>
+            </form>
+          </div>
+          <div>
+            <div class="panel" style="margin-bottom:18px;">
+              <div class="section-title">Master CV</div>
+              <p class="small muted" style="margin-top:0;">Upload your CV as a PDF, Word (.docx) or .txt file. We read it, add the skills we find, and use it when tailoring CVs. Uploading again replaces it.</p>
+              <label class="btn btn-primary btn-sm" style="display:inline-block;">Choose file
+                <input type="file" id="cvFileInput" accept=".pdf,.docx,.txt" style="display:none;">
+              </label>
+              <div id="cvCurrent" class="small" style="margin-top:10px;"></div>
+              <div id="cvUploadStatus" class="small" style="margin-top:10px;"></div>
+            </div>
+            <div class="panel">
+              <div class="section-title">Skills</div>
+              <form id="skillForm" class="row">
+                <input type="text" name="name" placeholder="e.g. SQL" class="grow" required>
+                <select name="proficiency" style="width:auto;"><option value="">Level</option><option>beginner</option><option>intermediate</option><option>advanced</option><option>expert</option></select>
+                <button class="btn btn-ghost btn-sm" type="submit">Add</button>
+              </form>
+              <div id="skillsList" style="margin-top:10px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:18px; grid-template-columns:1fr 1fr;">
+          <div class="panel">
+            <div class="section-title">Education</div>
+            <form id="eduForm">
+              <input type="text" name="qualification" placeholder="Qualification, e.g. BCom IT Management" required>
+              <div class="form-grid" style="margin-top:8px;">
+                <input type="text" name="institution" placeholder="Institution">
+                <select name="status"><option value="completed">Completed</option><option value="in_progress">In progress</option></select>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:10px;">Add education</button>
+            </form>
+            <div id="eduList" style="margin-top:8px;"></div>
+          </div>
+          <div class="panel">
+            <div class="section-title">Certifications</div>
+            <form id="certForm">
+              <input type="text" name="name" placeholder="Certification name" required>
+              <input type="text" name="issuer" placeholder="Issuer (optional)" style="margin-top:8px;">
+              <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:10px;">Add certification</button>
+            </form>
+            <div id="certList" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- JOBS -->
+      <section class="screen" id="screen-jobs">
+        <form class="panel row" id="jobSearchForm" style="margin-bottom:16px;">
+          <input type="text" name="title" placeholder="Job title or keyword" class="grow">
+          <input type="text" name="location" placeholder="Location" style="max-width:180px;">
+          <select name="remote" style="width:auto;"><option value="">Any work mode</option><option value="true">Remote only</option><option value="false">Not remote</option></select>
+          <input type="number" name="salary_min" placeholder="Min salary" style="max-width:130px;">
+          <button class="btn btn-primary btn-sm" type="submit">Search</button>
+        </form>
+        <div id="gemList"></div>
+        <div id="jobList"></div>
+        <div class="row" id="jobPager" style="justify-content:center; margin-top:12px;"></div>
+      </section>
+
+      <!-- APPLICATIONS -->
+      <section class="screen" id="screen-applications">
+        <p class="muted small" style="margin-top:0;">Move a card with its dropdown. Only valid moves are offered — an offer needs an interview stage first, and offers, rejections and closed applications are final.</p>
+        <div class="kanban" id="kanban"></div>
+      </section>
+
+      <!-- ANALYTICS -->
+      <section class="screen" id="screen-analytics">
+        <div class="row" style="margin-bottom:14px;">
+          <span class="small muted">Period</span>
+          <select id="periodSel" style="width:auto;"><option value="7d">7 days</option><option value="30d" selected>30 days</option><option value="90d">90 days</option></select>
+        </div>
+        <div id="analyticsNote"></div>
+        <div class="grid-3" style="margin-bottom:20px;" id="analyticsStats"></div>
+        <div class="grid-2" style="grid-template-columns:1fr 1fr;">
+          <div class="panel"><div class="section-title">By source</div><div id="bySource"></div></div>
+          <div class="panel"><div class="section-title">By role</div><div id="byRole"></div></div>
+        </div>
+        <div class="panel" style="margin-top:18px;"><div class="section-title">Trend</div><div id="trends"></div></div>
+      </section>
+
+      <!-- TRANSITION -->
+      <section class="screen" id="screen-transition">
+        <div class="row" style="margin-bottom:14px;">
+          <span class="small muted">I'm coming from</span>
+          <select id="sourceDomainSel" style="width:auto;"></select>
+        </div>
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="section-title">Readiness by target field</div>
+          <div id="domainReadiness"></div>
+        </div>
+        <div class="grid-2" style="grid-template-columns:1fr 1fr;">
+          <div class="panel"><div class="section-title">Recommended pathway</div><div id="pathway"></div></div>
+          <div class="panel">
+            <div class="section-title">Reframe your experience for a CV</div>
+            <form id="reframeForm">
+              <label class="field-label" style="margin-top:0;">Target field</label>
+              <select name="target_domain" id="reframeTarget"></select>
+              <label class="field-label">Describe what you did</label>
+              <textarea name="experience_text" rows="4" required placeholder="e.g. Led escalation handling and dispute resolution for a team of 12…"></textarea>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px;">Reframe</button>
+            </form>
+            <div id="reframeOut" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INTERVIEW -->
+      <section class="screen" id="screen-interview">
+        <div class="panel" style="margin-bottom:18px;">
+          <div class="section-title">Start a practice session</div>
+          <form id="ivStartForm" class="row">
+            <select name="source_domain" id="ivSource" style="width:auto;"></select>
+            <span class="muted small">→</span>
+            <select name="target_domain" id="ivTarget" style="width:auto;"></select>
+            <select name="behavioral_count" style="width:auto;"><option value="3">3 behavioural</option><option value="5" selected>5 behavioural</option><option value="8">8 behavioural</option></select>
+            <select name="technical_count" style="width:auto;"><option value="0">0 technical</option><option value="3" selected>3 technical</option><option value="5">5 technical</option></select>
+            <button class="btn btn-primary btn-sm" type="submit">Start</button>
+          </form>
+        </div>
+        <div id="ivSession"></div>
+        <div class="panel" style="margin-top:18px;"><div class="section-title">Past sessions</div><div id="ivHistory"></div></div>
+      </section>
+
+      <!-- BRANDING -->
+      <section class="screen" id="screen-branding">
+        <div class="grid-2" style="grid-template-columns:1fr 1fr;">
+          <div class="panel">
+            <div class="section-title">Your LinkedIn</div>
+            <form id="brandForm">
+              <label class="field-label" style="margin-top:0;">Headline</label>
+              <input type="text" name="linkedin_headline" maxlength="220">
+              <label class="field-label">About / summary</label>
+              <textarea name="linkedin_summary" rows="5"></textarea>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px;">Save &amp; check</button>
+            </form>
+          </div>
+          <div>
+            <div class="panel" style="margin-bottom:18px;"><div class="section-title">Consistency check: profile vs LinkedIn</div><div id="brandCheck"></div></div>
+            <div class="panel">
+              <div class="section-title">Suggested headline</div>
+              <div class="row"><select id="brandTarget" class="grow"></select><button class="btn btn-ghost btn-sm" id="brandSuggestBtn">Suggest</button></div>
+              <div id="brandSuggestion" style="margin-top:10px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INTELLIGENCE -->
+      <section class="screen" id="screen-intelligence">
+        <div class="row" style="margin-bottom:14px;">
+          <span class="small muted">Candidates coming from</span>
+          <select id="intelSource" style="width:auto;"></select>
+        </div>
+        <div class="panel" style="margin-bottom:18px;"><div class="section-title">Companies</div><div id="intelCompanies"></div></div>
+        <div class="panel"><div class="section-title">Recruiters</div><div id="intelRecruiters"></div></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="screen" id="screen-settings">
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="section-title">Account</div>
+          <div class="small" id="settingsEmail"></div>
+        </div>
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="section-title">Appearance</div>
+          <div class="small muted">Theme follows your system by default — use the 🌙 button in the top bar to switch.</div>
+        </div>
+        <div class="panel">
+          <div class="section-title">Pooled analytics</div>
+          <label style="display:flex; align-items:center; gap:10px; font-size:13.5px;">
+            <input type="checkbox" id="consentToggle"> Contribute my anonymised outcomes to Recruiter Intelligence
+          </label>
+          <p class="small muted">Only used in aggregates of 5+ contributors — your individual outcomes are never shown to other users.</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- JOB MODAL -->
+<div class="overlay" id="jobModal">
+  <div class="modal">
+    <button class="modal-close" data-close="jobModal" aria-label="Close">×</button>
+    <div id="jobModalBody"></div>
+  </div>
+</div>
