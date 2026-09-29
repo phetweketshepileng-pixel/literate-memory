@@ -1,9 +1,11 @@
 """Application Tracker router (Module 8)."""
 from __future__ import annotations
 
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,6 +83,65 @@ async def dashboard_metrics(
 
     metrics = compute_pipeline_metrics([a.stage for a in applications])
     return {"data": metrics, "meta": {}, "error": None}
+
+
+_SAST = timezone(timedelta(hours=2))
+
+
+@router.get("/activity")
+async def weekly_activity(
+    weeks: int = Query(default=8, ge=1, le=26),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-week counts for the dashboard: jobs saved, applications submitted,
+    interviews reached, offers — computed live from the stage history, so it
+    works before the nightly analytics snapshots exist."""
+    profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one()
+    today = datetime.now(_SAST).date()
+    this_monday = today - timedelta(days=today.weekday())
+    starts = [this_monday - timedelta(weeks=i) for i in range(weeks - 1, -1, -1)]
+    since = datetime.combine(starts[0], datetime.min.time(), tzinfo=_SAST)
+
+    def week_of(ts):
+        d = ts.astimezone(_SAST).date()
+        return d - timedelta(days=d.weekday())
+
+    saved = Counter(
+        week_of(ts)
+        for ts in (
+            await db.execute(
+                select(Application.created_at).where(
+                    Application.profile_id == profile.id, Application.created_at >= since
+                )
+            )
+        ).scalars()
+    )
+    moves = (
+        await db.execute(
+            select(ApplicationStageHistory.to_stage, ApplicationStageHistory.changed_at)
+            .join(Application, Application.id == ApplicationStageHistory.application_id)
+            .where(Application.profile_id == profile.id, ApplicationStageHistory.changed_at >= since)
+        )
+    ).all()
+    counts = {k: Counter() for k in ("submitted", "interview", "offer")}
+    for stage, ts in moves:
+        if stage in counts:
+            counts[stage][week_of(ts)] += 1
+    return {
+        "data": [
+            {
+                "week_start": w.isoformat(),
+                "saved": saved.get(w, 0),
+                "submitted": counts["submitted"].get(w, 0),
+                "interviews": counts["interview"].get(w, 0),
+                "offers": counts["offer"].get(w, 0),
+            }
+            for w in starts
+        ],
+        "meta": {"timezone": "Africa/Johannesburg"},
+        "error": None,
+    }
 
 
 @router.get("/{application_id}")
