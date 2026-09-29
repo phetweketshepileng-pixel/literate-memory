@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.core.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
+from app.modules.job_discovery.adapters.adzuna_adapter import AdzunaAdapter
 from app.modules.job_discovery.adapters.api_feed_adapter import ApiFeedAdapter
 from app.modules.job_discovery.adapters.career_page_adapter import AtsCareerPageAdapter
 from app.modules.job_discovery.adapters.rss_feed_adapter import RssFeedAdapter
@@ -25,6 +26,7 @@ ADAPTER_REGISTRY = {
     "api_feed": ApiFeedAdapter,
     "rss_feed": RssFeedAdapter,
     "career_page": AtsCareerPageAdapter,
+    "adzuna": AdzunaAdapter,
     # "search_discovery" intentionally omitted — its results route to a
     # separate onboarding queue, not this ingestion path (see
     # SearchEngineDiscoveryAdapter docstring).
@@ -78,12 +80,10 @@ async def _poll_source_async(source_id: str) -> dict:
             if not normalized.title:
                 continue  # unusable listing, skip rather than insert garbage
 
-            duplicate = await find_duplicate(db, normalized)
-            if duplicate is not None:
-                await record_additional_source(db, duplicate, str(source.id), normalized)
-                duplicate_count += 1
-                continue
-
+            # A listing this source already gave us is an update, not a
+            # cross-source duplicate — check that first, otherwise every
+            # re-poll would count the job as "seen elsewhere" and wrongly
+            # clear its hidden-gem flag / inflate competition_score.
             existing = (
                 await db.execute(
                     select(Job).where(
@@ -91,6 +91,13 @@ async def _poll_source_async(source_id: str) -> dict:
                     )
                 )
             ).scalar_one_or_none()
+
+            if existing is None:
+                duplicate = await find_duplicate(db, normalized)
+                if duplicate is not None and duplicate.source_id != source.id:
+                    await record_additional_source(db, duplicate, str(source.id), normalized)
+                    duplicate_count += 1
+                    continue
 
             if existing:
                 existing.title = normalized.title
