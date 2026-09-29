@@ -207,45 +207,179 @@
   }
 
   // ---------------- DASHBOARD ----------------
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function shortDate(iso) { var p = String(iso).split('-'); return Number(p[2]) + ' ' + MONTHS[Number(p[1]) - 1]; }
+  function fmtN(n) { return Number(n || 0).toLocaleString('en-ZA'); }
+  var ADZUNA_LINK = '<a href="https://www.adzuna.co.za" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>';
+  function viaLine(j) { return j && j.via === 'adzuna' ? '<div class="via">' + ADZUNA_LINK + '</div>' : ''; }
+
+  // Shared tooltip for every chart: positioned near the pointer or the focused bar.
+  var tip = $('chartTip');
+  function showTip(el, evt) {
+    tip.textContent = '';
+    var b = document.createElement('b'); b.textContent = el.getAttribute('data-tip-v'); tip.appendChild(b);
+    var k = document.createElement('span'); k.className = 'k'; tip.appendChild(k);
+    tip.appendChild(document.createTextNode(el.getAttribute('data-tip-l')));
+    tip.hidden = false;
+    var r = el.getBoundingClientRect(), x = evt && evt.clientX != null ? evt.clientX : r.left + r.width / 2, y = evt && evt.clientY != null ? evt.clientY : r.top;
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x - w / 2)) + 'px';
+    tip.style.top = Math.max(8, y - h - 12) + 'px';
+  }
+  function hideTip() { tip.hidden = true; }
+  function bindTips(container) {
+    Array.prototype.forEach.call(container.querySelectorAll('.hit'), function (el) {
+      el.addEventListener('mousemove', function (e) { showTip(el, e); });
+      el.addEventListener('mouseleave', hideTip);
+      el.addEventListener('focus', function () { showTip(el); });
+      el.addEventListener('blur', hideTip);
+    });
+  }
+  function tableHtml(head, rows) {
+    return '<table><tbody><tr><td class="muted">' + esc(head[0]) + '</td><td class="muted">' + esc(head[1]) + '</td></tr>' +
+      rows.map(function (r) { return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(fmtN(r[1])) + '</td></tr>'; }).join('') + '</tbody></table>';
+  }
+  function niceMax(v) { if (v <= 4) return 4; var p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p; return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+  // top-rounded bar path (4px radius on the data end only)
+  function colPath(x, y, w, h) { var r = Math.min(4, w / 2, h); return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z'; }
+  function rowPath(x, y, w, h) { var r = Math.min(4, h / 2, w); return 'M' + x + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h - r) + 'Q' + (x + w) + ',' + (y + h) + ' ' + (x + w - r) + ',' + (y + h) + 'H' + x + 'Z'; }
+
+  // Vertical columns. items: [{label, tick, value, tip}]
+  function columnChart(id, items, unit, emptyMsg) {
+    var el = $(id);
+    var total = items.reduce(function (s, i) { return s + i.value; }, 0);
+    if (!total) { el.innerHTML = '<div class="chart-empty">' + esc(emptyMsg) + '</div>'; return; }
+    var W = 320, H = 170, padL = 28, padB = 22, padT = 16, plotW = W - padL, plotH = H - padB - padT;
+    var max = niceMax(Math.max.apply(null, items.map(function (i) { return i.value; })));
+    var slot = plotW / items.length, bw = Math.min(24, slot - 2);
+    var maxIdx = 0; items.forEach(function (it, i) { if (it.value > items[maxIdx].value) maxIdx = i; });
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(el.getAttribute('data-label') || '') + '">';
+    [0, 0.5, 1].forEach(function (f) {
+      var y = padT + plotH * (1 - f);
+      s += '<line class="grid" x1="' + padL + '" x2="' + W + '" y1="' + y + '" y2="' + y + '"/><text class="axis-t" x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + fmtN(max * f) + '</text>';
+    });
+    items.forEach(function (it, i) {
+      var h = it.value ? Math.max(2, plotH * it.value / max) : 0, x = padL + slot * i + (slot - bw) / 2, y = padT + plotH - h;
+      s += '<rect class="hit" tabindex="0" x="' + (padL + slot * i) + '" y="' + padT + '" width="' + slot + '" height="' + plotH + '" data-tip-v="' + esc(fmtN(it.value) + ' ' + unit) + '" data-tip-l="' + esc(it.tip) + '" aria-label="' + esc(it.tip + ': ' + it.value + ' ' + unit) + '"/>';
+      if (h) s += '<path class="bar" d="' + colPath(x, y, bw, h) + '"/>';
+      if (it.tick) s += '<text class="axis-t" x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(it.tick) + '</text>';
+      if ((i === maxIdx || i === items.length - 1) && it.value) s += '<text class="val-t" x="' + (x + bw / 2) + '" y="' + (y - 4) + '" text-anchor="middle">' + fmtN(it.value) + '</text>';
+    });
+    el.innerHTML = s + '</svg>';
+    bindTips(el);
+  }
+
+  // Horizontal bars, labels on the left, values at bar end.
+  function barList(id, items, unit) {
+    var el = $(id);
+    if (!items.length) { el.innerHTML = '<div class="chart-empty">No jobs yet.</div>'; return; }
+    var W = 320, rowH = 22, gap = 6, padL = 116, padR = 40, H = items.length * (rowH + gap);
+    var max = Math.max.apply(null, items.map(function (i) { return i.value; }));
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Jobs by region">';
+    items.forEach(function (it, i) {
+      var y = i * (rowH + gap), bh = 16, by = y + (rowH - bh) / 2, w = Math.max(2, (W - padL - padR) * it.value / max);
+      s += '<rect class="hit" tabindex="0" x="0" y="' + y + '" width="' + W + '" height="' + rowH + '" data-tip-v="' + esc(fmtN(it.value) + ' ' + unit) + '" data-tip-l="' + esc(it.label) + '" aria-label="' + esc(it.label + ': ' + it.value + ' ' + unit) + '"/>';
+      s += '<path class="bar" d="' + rowPath(padL, by, w, bh) + '"/>';
+      s += '<text class="axis-t" x="' + (padL - 8) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end">' + esc(it.label) + '</text>';
+      s += '<text class="val-t" x="' + (padL + w + 6) + '" y="' + (y + rowH / 2 + 4) + '">' + fmtN(it.value) + '</text>';
+    });
+    el.innerHTML = s + '</svg>';
+    bindTips(el);
+  }
+
+  function recCard(j) {
+    var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
+    return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
+      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + '</div>' +
+      (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
+      '<div class="rec-actions"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View</button><button class="btn btn-moss btn-sm" data-save-job="' + esc(j.id) + '">Save</button></div></div>';
+  }
+  $('dashRecommended').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-save-job]'); if (!b) return;
+    e.stopPropagation(); b.disabled = true;
+    api('POST', '/applications', { job_id: b.getAttribute('data-save-job') }).then(function () {
+      toast('Saved to your pipeline'); b.textContent = 'Saved ✓';
+      get('/applications/dashboard').then(renderPipeline).catch(function () {});
+    }).catch(function (err) { b.disabled = false; fail(err); });
+  });
+
+  var FUNNEL = ['saved', 'applying', 'submitted', 'screening', 'interview', 'assessment', 'offer'];
+  function renderPipeline(d) {
+    if (!d.total) { $('dashPipeline').innerHTML = '<div class="small muted">Nothing tracked yet. Press <b>Save</b> on a job to start your pipeline.</div>'; return; }
+    var max = Math.max.apply(null, FUNNEL.map(function (k) { return d[k] || 0; })) || 1;
+    $('dashPipeline').innerHTML = FUNNEL.map(function (k) {
+      var v = d[k] || 0;
+      return '<div class="pipe-row"><span class="lbl">' + label(k) + '</span><span class="trk">' + (v ? '<i style="width:' + (100 * v / max) + '%"></i>' : '') + '</span><span class="val">' + v + '</span></div>';
+    }).join('') + '<div class="small muted" style="margin-top:6px;">' + d.total + ' tracked in total</div>';
+  }
+
   loaders.dashboard = function () {
     get('/profile/completion-score').then(function (c) {
       $('dashCompletionPct').textContent = c.score + '%';
       $('dashCompletionBar').style.width = c.score + '%';
-      $('dashMissing').innerHTML = c.missing_fields && c.missing_fields.length ? 'Still missing: ' + c.missing_fields.map(esc).join(' · ') + ' — <a href="#" data-nav="profile">complete profile</a>' : 'Your profile is complete.';
+      $('dashMeter').setAttribute('aria-valuenow', c.score);
+      $('dashMissing').innerHTML = c.missing_fields && c.missing_fields.length ? 'Missing: ' + c.missing_fields.slice(0, 3).map(esc).join(', ') + (c.missing_fields.length > 3 ? '…' : '') + ' · <a href="#" data-nav="profile">finish</a>' : 'Complete. Nice work.';
     }).catch(fail);
 
-    loadingInto('dashMatches');
-    get('/matches').then(function (ms) {
-      if (!ms.length) { $('dashMatches').innerHTML = '<div class="small muted" style="margin-bottom:8px;">No match scores yet. Open a job and click <b>Score my match</b>.</div>'; return; }
-      return Promise.all(ms.slice(0, 3).map(function (m) { return getJob(m.job_id).then(function (j) { return { m: m, j: j }; }); })).then(function (rows) {
-        $('dashMatches').innerHTML = rows.map(function (r) {
-          return '<div style="display:flex; justify-content:space-between; margin-bottom:8px; gap:8px;"><a href="#" class="small" data-job="' + esc(r.j.id) + '">' + esc(r.j.title) + (r.j.company ? ' — ' + esc(r.j.company) : '') + '</a><span class="small" style="color:var(--leaf-deep); font-weight:600;">' + esc(r.m.match_score) + '%</span></div>';
-        }).join('');
-      });
-    }).catch(function (e) { $('dashMatches').innerHTML = '<div class="small muted">' + esc(e.message) + '</div>'; });
+    api('GET', '/jobs/stats').then(function (j) {
+      var s = j.data, days = s.added_per_day;
+      $('kpiToday').textContent = fmtN(s.new_today);
+      var yday = days.length > 1 ? days[days.length - 2].count : 0;
+      $('kpiTodaySub').textContent = fmtN(yday) + ' yesterday';
+      var smax = Math.max.apply(null, days.map(function (d) { return d.count; })) || 1;
+      $('kpiSpark').innerHTML = days.map(function (d, i) { return '<span class="' + (i === days.length - 1 ? 'now' : '') + '" style="height:' + Math.max(8, 100 * d.count / smax) + '%"></span>'; }).join('');
+      $('kpiTotal').textContent = fmtN(s.total_active);
+      $('kpiTotalSub').textContent = fmtN(s.new_this_week) + ' added in the last 7 days';
 
-    get('/applications/dashboard').then(function (d) {
-      var keys = ['saved', 'applying', 'submitted', 'screening', 'interview', 'offer'];
-      $('dashPipeline').innerHTML = d.total ? keys.filter(function (k) { return d[k]; }).map(function (k) { return '<div class="small" style="margin-bottom:6px;">' + label(k) + ' &nbsp;<b>' + d[k] + '</b></div>'; }).join('') + '<div class="small muted">' + d.total + ' total</div>'
-        : '<div class="small muted">Nothing tracked yet. Save a job from Job Search to start your pipeline.</div>';
-    }).catch(fail);
+      columnChart('chartDaily', days.map(function (d, i) {
+        return { value: d.count, tip: shortDate(d.date), tick: (i % 3 === 1 || i === days.length - 1) ? shortDate(d.date) : '' };
+      }), 'jobs', 'No new jobs in the last 14 days.');
+      $('chartDailyTable').innerHTML = tableHtml(['Day', 'Jobs added'], days.map(function (d) { return [shortDate(d.date), d.count]; }).reverse());
 
-    api('GET', '/analytics/summary?period=30d').then(function (j) {
-      var s = j.data;
-      $('dashWeek').innerHTML = '<div class="small" style="margin-bottom:6px;">Applications sent &nbsp;<b>' + s.applications_submitted + '</b></div>' +
-        '<div class="small" style="margin-bottom:6px;">Interviews &nbsp;<b>' + s.interviews + '</b></div>' +
-        '<div class="small" style="margin-bottom:6px;">Response rate &nbsp;<b>' + pct(s.response_rate) + '</b></div>' +
-        (j.meta && j.meta.note ? '<div class="small muted">' + esc(j.meta.note) + '</div>' : '');
-    }).catch(fail);
+      var regions = s.by_region.slice(0, 7), rest = s.by_region.slice(7).reduce(function (a, r) { return a + r.count; }, 0);
+      if (rest) regions.push({ label: 'Everything else', count: rest });
+      barList('chartRegions', regions.map(function (r) { return { label: r.label, value: r.count }; }), 'jobs');
+      $('chartRegionsTable').innerHTML = tableHtml(['Region', 'Jobs'], s.by_region.map(function (r) { return [r.label, r.count]; }));
+
+      var src = s.by_source.map(function (r) { return esc(r.label) + ' ' + fmtN(r.count); }).join(' · ');
+      $('dashSources').innerHTML = 'Where your feed comes from: ' + src + '. Refreshed every 6 hours. South African listings: ' + ADZUNA_LINK + '.';
+    }).catch(function (e) { $('chartDaily').innerHTML = '<div class="chart-empty">' + esc(e.message) + '</div>'; });
+
+    loadingInto('dashRecommended');
+    api('GET', '/jobs/recommended?limit=5').then(function (j) {
+      jobsFromList(j.data);
+      if (j.meta && j.meta.reason === 'no_preferences') {
+        $('kpiFits').textContent = '—';
+        $('dashRecommended').innerHTML = empty('<b>Tell us what you are looking for.</b><br>Add your target roles and a few skills on <a href="#" data-nav="profile">My Profile</a> and your best matches will show up here.');
+        return;
+      }
+      $('kpiFits').textContent = fmtN(j.meta ? j.meta.candidates : j.data.length);
+      $('dashRecommended').innerHTML = j.data.length ? j.data.map(recCard).join('') :
+        empty('<b>No strong matches right now.</b><br>Try adding more target roles or skills on your profile. New jobs arrive every 6 hours.');
+    }).catch(function (e) { $('dashRecommended').innerHTML = empty(esc(e.message)); });
+
+    get('/applications/dashboard').then(renderPipeline).catch(fail);
+
+    get('/applications/activity?weeks=8').then(function (weeks) {
+      columnChart('chartWeekly', weeks.map(function (w, i) {
+        return { value: w.submitted, tip: 'Week of ' + shortDate(w.week_start) + ' · ' + w.interviews + ' interview' + (w.interviews === 1 ? '' : 's'), tick: (i % 2 === 1) ? shortDate(w.week_start) : '' };
+      }), 'submitted', 'No applications submitted in the last 8 weeks yet. Move a saved job to “Submitted” when you apply.');
+      $('chartWeeklyTable').innerHTML = '<table><tbody><tr><td class="muted">Week of</td><td class="muted">Saved</td><td class="muted">Submitted</td><td class="muted">Interviews</td></tr>' +
+        weeks.slice().reverse().map(function (w) { return '<tr><td>' + esc(shortDate(w.week_start)) + '</td><td>' + w.saved + '</td><td>' + w.submitted + '</td><td>' + w.interviews + '</td></tr>'; }).join('') + '</tbody></table>';
+    }).catch(function (e) { $('chartWeekly').innerHTML = '<div class="chart-empty">' + esc(e.message) + '</div>'; });
 
     get('/jobs/hidden-gems').then(function (gems) {
-      if (!gems.length) { $('dashGem').innerHTML = ''; return; }
-      var g = gems[0];
-      $('dashGem').innerHTML = '<div class="hidden-gem-strip"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;"><div><span class="pill pill-moss">💎 Hidden Gem</span>' +
-        '<div style="font-weight:600; margin-top:6px;">' + esc(g.title) + (g.company ? ' — ' + esc(g.company) : '') + '</div><div class="small muted">' + esc(g.location || '') + (g.competition_score ? ' · ' + esc(label(g.competition_score)) + ' competition' : '') + '</div></div>' +
-        '<button class="btn btn-moss btn-sm" data-job="' + esc(g.id) + '">View job</button></div></div>';
-    }).catch(function () {});
+      if (!gems.length) {
+        $('dashGem').innerHTML = '<div class="panel"><div class="section-title" style="margin:0 0 6px;">💎 Hidden gem of the day</div><div class="small muted">None today. Hidden gems are jobs posted only on a company\'s own careers page, with few applicants. They appear here as soon as the feed finds one.</div></div>';
+        return;
+      }
+      var g = gems[new Date().getDate() % Math.min(gems.length, 5)];
+      $('dashGem').innerHTML = '<div class="hidden-gem-strip"><span class="pill pill-moss">💎 Hidden gem of the day</span>' +
+        '<div style="font-weight:600; margin-top:8px;">' + esc(g.title) + (g.company ? ' — ' + esc(g.company) : '') + '</div><div class="small muted">' + esc(g.location || '') + (g.competition_score ? ' · ' + esc(label(g.competition_score)) + ' competition' : '') + '</div>' +
+        '<button class="btn btn-moss btn-sm" style="margin-top:10px;" data-job="' + esc(g.id) + '">View job</button></div>';
+    }).catch(function () { $('dashGem').innerHTML = ''; });
   };
+  function jobsFromList(list) { (list || []).forEach(function (x) { jobCache[x.id] = Object.assign(jobCache[x.id] || {}, x); }); }
 
   // ---------------- PROFILE ----------------
   var LIST_FIELDS = ['desired_roles', 'location_preferences'];
@@ -362,7 +496,7 @@
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
       (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
-      '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
+      viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
   }
   function searchJobs(page) {
     jobPage = page || 1;
@@ -399,7 +533,7 @@
       var sal = j.salary_min || j.salary_max ? money(j.salary_min) + (j.salary_max ? '–' + money(j.salary_max) : '') : '';
       $('jobModalBody').innerHTML = '<h2 style="margin-top:4px;">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') + '</h2>' +
         '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + j.date_posted : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
-        '<div id="matchBox"></div>' +
+        viaLine(j) + '<div id="matchBox"></div>' +
         (j.description ? '<div class="field-label">Description</div><div class="small" style="white-space:pre-wrap; max-height:220px; overflow:auto;">' + esc(j.description) + '</div>' : '') +
         '<div class="row" style="margin-top:18px;">' +
           '<button class="btn btn-primary btn-sm" id="saveJobBtn">Save to pipeline</button>' +

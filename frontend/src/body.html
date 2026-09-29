@@ -78,32 +78,54 @@
 
       <!-- DASHBOARD -->
       <section class="screen active" id="screen-dashboard">
-        <div class="panel" style="margin-bottom:18px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div class="section-title" style="margin:0;">Profile completion</div>
-            <span class="small muted" id="dashCompletionPct">—</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" id="dashCompletionBar" style="width:0%;"></div></div>
-          <div class="small muted" id="dashMissing" style="margin-top:8px;"></div>
+        <!-- KPI row -->
+        <div class="kpi-row" id="kpiRow">
+          <div class="panel kpi"><div class="kpi-label">New jobs today</div><div class="kpi-value" id="kpiToday">—</div><div class="kpi-sub" id="kpiTodaySub">&nbsp;</div><div class="spark" id="kpiSpark" aria-hidden="true"></div></div>
+          <div class="panel kpi"><div class="kpi-label">Jobs in your feed</div><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-sub" id="kpiTotalSub">&nbsp;</div></div>
+          <div class="panel kpi"><div class="kpi-label">Good fits for you</div><div class="kpi-value" id="kpiFits">—</div><div class="kpi-sub">jobs scoring 30+ on quick fit</div></div>
+          <div class="panel kpi"><div class="kpi-label">Profile completion</div><div class="kpi-value" id="dashCompletionPct">—</div>
+            <div class="meter" role="meter" aria-label="Profile completion" aria-valuemin="0" aria-valuemax="100" id="dashMeter"><div class="meter-fill" id="dashCompletionBar" style="width:0%;"></div></div>
+            <div class="kpi-sub" id="dashMissing">&nbsp;</div></div>
         </div>
-        <div class="grid-3">
+
+        <!-- Main row: top matches + side widgets -->
+        <div class="dash-main">
           <div class="panel">
-            <div class="section-title">Top Matches</div>
-            <div id="dashMatches"></div>
-            <button class="btn btn-ghost btn-sm" data-nav="jobs" style="margin-top:8px;">Find jobs</button>
+            <div class="panel-head"><div class="section-title" style="margin:0;">Top matches for you</div>
+              <button class="btn btn-ghost btn-sm" data-nav="jobs">All jobs</button></div>
+            <div class="small muted" style="margin:-4px 0 10px;">Ranked by <b>quick fit</b>: your target roles, skills and preferred locations. Instant and free; not the AI match score.</div>
+            <div id="dashRecommended"></div>
           </div>
-          <div class="panel">
-            <div class="section-title">Pipeline Snapshot</div>
-            <div id="dashPipeline"></div>
-            <button class="btn btn-ghost btn-sm" data-nav="applications" style="margin-top:8px;">Open pipeline</button>
-          </div>
-          <div class="panel">
-            <div class="section-title">Last 30 days</div>
-            <div id="dashWeek"></div>
-            <button class="btn btn-ghost btn-sm" data-nav="analytics" style="margin-top:8px;">Full analytics</button>
+          <div class="dash-side">
+            <div id="dashGem"></div>
+            <div class="panel">
+              <div class="panel-head"><div class="section-title" style="margin:0;">Your pipeline</div>
+                <button class="btn btn-ghost btn-sm" data-nav="applications">Open</button></div>
+              <div id="dashPipeline"></div>
+            </div>
           </div>
         </div>
-        <div id="dashGem"></div>
+
+        <!-- Charts row -->
+        <div class="dash-charts">
+          <div class="panel chart-card">
+            <div class="section-title">Jobs added per day <span class="muted">(last 14 days)</span></div>
+            <div class="chart" id="chartDaily"></div>
+            <details class="chart-table"><summary>View as table</summary><div id="chartDailyTable"></div></details>
+          </div>
+          <div class="panel chart-card">
+            <div class="section-title">Where the jobs are</div>
+            <div class="chart" id="chartRegions"></div>
+            <details class="chart-table"><summary>View as table</summary><div id="chartRegionsTable"></div></details>
+          </div>
+          <div class="panel chart-card">
+            <div class="section-title">Your weekly activity <span class="muted">(applications submitted)</span></div>
+            <div class="chart" id="chartWeekly"></div>
+            <details class="chart-table"><summary>View as table</summary><div id="chartWeeklyTable"></div></details>
+          </div>
+        </div>
+        <div class="small muted" id="dashSources" style="margin-top:12px;"></div>
+        <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
       </section>
 
       <!-- PROFILE -->
@@ -190,6 +212,7 @@
         <div id="gemList"></div>
         <div id="jobList"></div>
         <div class="row" id="jobPager" style="justify-content:center; margin-top:12px;"></div>
+        <div class="small muted via" style="text-align:center; margin-top:10px;">South African listings: <a href="https://www.adzuna.co.za" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a></div>
       </section>
 
       <!-- APPLICATIONS -->
