@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     AI_PROVIDER: str = "openai"
     OPENAI_API_KEY: str = ""
+    ADZUNA_APP_ID: str = ""
+    ADZUNA_APP_KEY: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod
