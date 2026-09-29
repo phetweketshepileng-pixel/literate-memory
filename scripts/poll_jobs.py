@@ -23,6 +23,23 @@ SOURCES = {
     "Himalayas": {**R, "feed_url": "https://himalayas.app/jobs/rss"},
 }
 
+# South African roles via the Adzuna API (needs ADZUNA_APP_ID / ADZUNA_APP_KEY).
+# Targets the platform's core transition paths: collections/banking into
+# business/systems/process/operations analysis and IT management.
+A = {"adapter_type": "adzuna", "country": "za", "max_days_old": 21, "pages": 2}
+ADZUNA_SEARCHES = [
+    ("business analyst", "Gauteng"),
+    ("business analyst", None),
+    ("systems analyst", "Gauteng"),
+    ("process analyst", "Gauteng"),
+    ("process improvement", "Gauteng"),
+    ("operations analyst", "Gauteng"),
+    ("IT manager", "Gauteng"),
+    ("junior business analyst", None),
+]
+for what, where in ADZUNA_SEARCHES:
+    SOURCES[f"Adzuna SA: {what}" + (f" ({where})" if where else " (all SA)")] = {**A, "what": what, **({"where": where} if where else {})}
+
 # Sources dropped after the first live run: Remotive's business and
 # finance feeds return 404, and the ACCA feed ignores its country filter
 # (listings were European, not South African). Their jobs are hidden.
@@ -63,6 +80,10 @@ async def main():
             await db.execute(text("UPDATE jobs SET is_active = false, closed_at = now() WHERE source_id = :s AND is_active"), {"s": src.id})
         await db.commit()
         ids = [(s.name, str(s.id)) for s in (await db.execute(select(JobSource).where(JobSource.is_active))).scalars()]
+    from app.core.config import settings
+    if not (settings.ADZUNA_APP_ID and settings.ADZUNA_APP_KEY):
+        print("NOTE Adzuna keys not set - skipping South African job searches (set ADZUNA_APP_ID and ADZUNA_APP_KEY)", flush=True)
+        ids = [(n, i) for n, i in ids if not n.startswith("Adzuna")]
     for name, sid in ids:
         try:
             print("POLL", json.dumps(await _poll_source_async(sid)), flush=True)
