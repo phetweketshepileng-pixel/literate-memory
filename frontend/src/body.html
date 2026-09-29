@@ -202,13 +202,35 @@
 
       <!-- JOBS -->
       <section class="screen" id="screen-jobs">
-        <form class="panel row" id="jobSearchForm" style="margin-bottom:16px;">
-          <input type="text" name="title" placeholder="Job title or keyword" class="grow">
-          <input type="text" name="location" placeholder="Location" style="max-width:180px;">
-          <select name="remote" style="width:auto;"><option value="">Any work mode</option><option value="true">Remote only</option><option value="false">Not remote</option></select>
-          <input type="number" name="salary_min" placeholder="Min salary" style="max-width:130px;">
-          <button class="btn btn-primary btn-sm" type="submit">Search</button>
+        <form class="panel search-form" id="jobSearchForm" autocomplete="off" role="search">
+          <div class="sf-row">
+            <div class="suggest-wrap grow">
+              <label class="sf-label" for="jobQ">What</label>
+              <input type="text" id="jobQ" name="q" placeholder="Job title, company or skill, e.g. business analyst" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="jobQList">
+              <ul class="suggest-list" id="jobQList" role="listbox" hidden></ul>
+            </div>
+            <div class="suggest-wrap sf-where">
+              <label class="sf-label" for="jobLoc">Where</label>
+              <input type="text" id="jobLoc" name="location" placeholder="City, province or country" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="jobLocList">
+              <ul class="suggest-list" id="jobLocList" role="listbox" hidden></ul>
+            </div>
+            <button class="btn btn-primary sf-go" type="submit">Search</button>
+          </div>
+          <div class="sf-row sf-filters">
+            <label class="sf-mini">Salary (per year)
+              <select name="salary_min"><option value="">Any salary</option><option value="200000">R200k+</option><option value="300000">R300k+</option><option value="400000">R400k+</option><option value="500000">R500k+</option><option value="600000">R600k+</option><option value="800000">R800k+</option><option value="1000000">R1m+</option></select>
+            </label>
+            <label class="sf-check"><input type="checkbox" name="include_no_salary" value="true" checked> Include jobs that don't show a salary</label>
+            <label class="sf-mini">Work mode
+              <select name="remote"><option value="">Any</option><option value="true">Remote only</option><option value="false">On-site / hybrid</option></select>
+            </label>
+            <label class="sf-mini">Posted
+              <select name="posted_within_days"><option value="">Any time</option><option value="1">Last 24 hours</option><option value="3">Last 3 days</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+            </label>
+            <button class="btn btn-ghost btn-sm" type="button" id="jobClear">Clear</button>
+          </div>
         </form>
+        <div class="small muted" id="jobCount" style="margin:0 0 10px;"></div>
         <div id="gemList"></div>
         <div id="jobList"></div>
         <div class="row" id="jobPager" style="justify-content:center; margin-top:12px;"></div>

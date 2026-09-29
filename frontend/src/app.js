@@ -211,6 +211,10 @@
   function shortDate(iso) { var p = String(iso).split('-'); return Number(p[2]) + ' ' + MONTHS[Number(p[1]) - 1]; }
   function fmtN(n) { return Number(n || 0).toLocaleString('en-ZA'); }
   var ADZUNA_LINK = '<a href="https://www.adzuna.co.za" target="_blank" rel="noopener noreferrer">Jobs by Adzuna</a>';
+  function alsoIn(j) {
+    var a = j && j.also_in; if (!a || !a.length) return '';
+    return '<div class="also-in">Also advertised in ' + a.slice(0, 3).map(esc).join('; ') + (a.length > 3 ? ' and ' + (a.length - 3) + ' more' : '') + '</div>';
+  }
   function viaLine(j) { return j && j.via === 'adzuna' ? '<div class="via">' + ADZUNA_LINK + '</div>' : ''; }
 
   // Shared tooltip for every chart: positioned near the pointer or the focused bar.
@@ -291,7 +295,7 @@
     var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
       '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + '</div>' +
-      (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
+      alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
       '<div class="rec-actions"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View</button><button class="btn btn-moss btn-sm" data-save-job="' + esc(j.id) + '">Save</button></div></div>';
   }
   $('dashRecommended').addEventListener('click', function (e) {
@@ -492,26 +496,84 @@
   function jobCard(j) {
     var cls = j.is_hidden_gem ? 'gem' : (j.match_score >= 80 ? 'high-match' : '');
     var sal = j.salary_min || j.salary_max ? money(j.salary_min) + (j.salary_max ? '–' + money(j.salary_max) : '') : '';
-    var meta = [j.location, j.is_remote ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + j.date_posted : ''].filter(Boolean).map(esc).join(' · ');
+    var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
       (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
-      viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
+      alsoIn(j) + viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
+  }
+  function searchParams() {
+    var f = $('jobSearchForm'), q = [];
+    ['q', 'location', 'salary_min', 'remote', 'posted_within_days'].forEach(function (n) {
+      var v = (f.elements[n].value || '').trim(); if (v) q.push(n + '=' + encodeURIComponent(v));
+    });
+    if (f.elements.salary_min.value && !f.elements.include_no_salary.checked) q.push('include_no_salary=false');
+    return q;
   }
   function searchJobs(page) {
     jobPage = page || 1;
-    var d = formData($('jobSearchForm')), q = [];
-    Object.keys(d).forEach(function (k) { if (d[k] !== '') q.push(k + '=' + encodeURIComponent(d[k])); });
+    var q = searchParams();
     q.push('page=' + jobPage, 'page_size=20');
-    loadingInto('jobList');
+    loadingInto('jobList'); $('jobCount').textContent = '';
     api('GET', '/jobs/search?' + q.join('&')).then(function (j) {
       j.data.forEach(function (x) { jobCache[x.id] = Object.assign(jobCache[x.id] || {}, x); });
+      var total = j.meta.total || 0, pages = Math.ceil(total / 20), filtered = searchParams().length > 0;
+      $('jobCount').textContent = total ? total.toLocaleString('en-ZA') + ' job' + (total === 1 ? '' : 's') + (j.meta.postings > total ? ' (' + j.meta.postings.toLocaleString('en-ZA') + ' ads, repeats of the same job grouped)' : '') : '';
       $('jobList').innerHTML = j.data.length ? j.data.map(jobCard).join('') :
-        empty('<b>No jobs found.</b><br>No job listings have been collected into your database yet — the job discovery feed isn\'t connected to any sources. Once sources are added, listings will appear here automatically.');
-      var total = j.meta.total || 0, pages = Math.ceil(total / 20);
-      $('jobPager').innerHTML = pages > 1 ? '<button class="btn btn-ghost btn-sm" ' + (jobPage <= 1 ? 'disabled' : '') + ' data-page="' + (jobPage - 1) + '">‹ Prev</button><span class="small muted">Page ' + jobPage + ' of ' + pages + ' · ' + total + ' jobs</span><button class="btn btn-ghost btn-sm" ' + (jobPage >= pages ? 'disabled' : '') + ' data-page="' + (jobPage + 1) + '">Next ›</button>' : '';
+        empty(filtered ? '<b>No jobs match those filters.</b><br>Try fewer keywords, a wider area (a province instead of a suburb), or tick “Include jobs that don\'t show a salary”.'
+                       : '<b>No jobs yet.</b><br>The feed adds new listings every 6 hours.');
+      $('jobPager').innerHTML = pages > 1 ? '<button class="btn btn-ghost btn-sm" ' + (jobPage <= 1 ? 'disabled' : '') + ' data-page="' + (jobPage - 1) + '">‹ Prev</button><span class="small muted">Page ' + jobPage + ' of ' + pages + '</span><button class="btn btn-ghost btn-sm" ' + (jobPage >= pages ? 'disabled' : '') + ' data-page="' + (jobPage + 1) + '">Next ›</button>' : '';
     }).catch(function (e) { $('jobList').innerHTML = empty(esc(e.message)); });
   }
+  ['salary_min', 'remote', 'posted_within_days', 'include_no_salary'].forEach(function (n) {
+    $('jobSearchForm').elements[n].addEventListener('change', function () { searchJobs(1); });
+  });
+  $('jobClear').onclick = function () {
+    var f = $('jobSearchForm'); f.reset(); f.elements.include_no_salary.checked = true; searchJobs(1);
+  };
+
+  // Type-ahead: after 2 letters, offer real options from the feed, each with a job count.
+  function attachSuggest(input, list, kind) {
+    var timer = null, items = [], active = -1, lastQ = null, seq = 0;
+    function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; }
+    function paint() {
+      list.innerHTML = items.length ? items.map(function (it, i) {
+        return '<li role="option" id="' + list.id + '-' + i + '" data-i="' + i + '" aria-selected="' + (i === active) + '"><span>' + esc(it.value) +
+          '</span><span class="s-kind">' + esc(it.kind + (it.hint ? ' · ' + it.hint : '')) + ' · <span class="s-n">' + esc(it.count.toLocaleString('en-ZA')) + '</span></span></li>';
+      }).join('') : '<li class="s-empty">No matches in the current feed. Press Search to look anyway.</li>';
+      list.hidden = false; input.setAttribute('aria-expanded', 'true');
+      if (active >= 0) input.setAttribute('aria-activedescendant', list.id + '-' + active); else input.removeAttribute('aria-activedescendant');
+    }
+    function pick(i) { if (!items[i]) return; input.value = items[i].value; close(); searchJobs(1); }
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(function () {
+        if (q === lastQ && items.length) { paint(); return; }
+        var my = ++seq; lastQ = q;
+        get('/jobs/suggest?kind=' + kind + '&q=' + encodeURIComponent(q)).then(function (d) {
+          if (my !== seq || document.activeElement !== input) return;
+          items = d; active = -1; paint();
+        }).catch(function () {});
+      }, 180);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(items.length - 1, active + 1); paint(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(-1, active - 1); paint(); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
+      else if (e.key === 'Escape') { close(); }
+    });
+    list.addEventListener('mousedown', function (e) {
+      var li = e.target.closest('li[data-i]'); if (!li) return;
+      e.preventDefault(); pick(Number(li.getAttribute('data-i')));
+    });
+    input.addEventListener('blur', function () { setTimeout(close, 120); });
+    $('jobSearchForm').addEventListener('submit', close);
+  }
+  attachSuggest($('jobQ'), $('jobQList'), 'keyword');
+  attachSuggest($('jobLoc'), $('jobLocList'), 'location');
   $('jobPager').addEventListener('click', function (e) { var p = e.target.dataset && e.target.dataset.page; if (p) searchJobs(Number(p)); });
   $('jobSearchForm').addEventListener('submit', function (e) { e.preventDefault(); searchJobs(1); });
   loaders.jobs = function () {
@@ -532,7 +594,7 @@
       jobCache[id] = j;
       var sal = j.salary_min || j.salary_max ? money(j.salary_min) + (j.salary_max ? '–' + money(j.salary_max) : '') : '';
       $('jobModalBody').innerHTML = '<h2 style="margin-top:4px;">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') + '</h2>' +
-        '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + j.date_posted : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
+        '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
         viaLine(j) + '<div id="matchBox"></div>' +
         (j.description ? '<div class="field-label">Description</div><div class="small" style="white-space:pre-wrap; max-height:220px; overflow:auto;">' + esc(j.description) + '</div>' : '') +
         '<div class="row" style="margin-top:18px;">' +
