@@ -1,60 +1,103 @@
 """Job Discovery / Hidden Gems router (Modules 2 & 3)."""
 from __future__ import annotations
 
+import re
+import time
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models import Application, Job, JobMatch, JobSource, Profile, Skill
 from app.modules.job_discovery.insights import FitInput, quick_fit, region_bucket
+from app.modules.job_discovery.search_helpers import (
+    JobRow,
+    collapse_duplicates,
+    group_key,
+    keyword_suggestions,
+    location_suggestions,
+    location_terms,
+)
+from app.modules.profile.cv_parsing import SKILL_VOCABULARY
 from app.modules.job_discovery.ranking import RankableJob, rank_search_results
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+_KEYWORD_WORD = re.compile(r"[\w+#.]{2,}")
+
+
+def _search_filters(q, title, location, remote, salary_min, include_no_salary, posted_within_days):
+    """WHERE clauses shared by search and its count. Every keyword must appear
+    in the title, company or description; location expands provinces/cities."""
+    conds = [Job.is_active.is_(True)]
+    for word in _KEYWORD_WORD.findall(f"{q or ''} {title or ''}"):
+        like = f"%{word}%"
+        conds.append(or_(Job.title.ilike(like), Job.company.ilike(like), Job.description.ilike(like)))
+    if location:
+        terms, loc_remote = location_terms(location)
+        ors = [Job.location.ilike(f"%{t}%") for t in terms]
+        if loc_remote:
+            ors.append(Job.is_remote.is_(True))
+        conds.append(or_(*ors))
+    if remote is not None:
+        conds.append(Job.is_remote.is_(remote))
+    if salary_min is not None:
+        shows = or_(Job.salary_max >= salary_min, and_(Job.salary_max.is_(None), Job.salary_min >= salary_min))
+        if include_no_salary:
+            conds.append(or_(shows, and_(Job.salary_min.is_(None), Job.salary_max.is_(None))))
+        else:
+            conds.append(shows)
+    if posted_within_days:
+        since = datetime.now(_SAST).date() - timedelta(days=posted_within_days)
+        conds.append(or_(Job.date_posted >= since, and_(Job.date_posted.is_(None), Job.created_at >= datetime.now(UTC) - timedelta(days=posted_within_days))))
+    return conds
+
+
 @router.get("/search")
 async def search_jobs(
+    q: str | None = None,
     title: str | None = None,
     industry: str | None = None,
     salary_min: int | None = None,
+    include_no_salary: bool = True,
     location: str | None = None,
     remote: bool | None = None,
+    posted_within_days: int | None = Query(default=None, ge=1, le=90),
     date_posted_after: date | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Job).where(Job.is_active.is_(True))
-    if title:
-        query = query.where(or_(Job.title.ilike(f"%{title}%"), Job.company.ilike(f"%{title}%")))
-    if location:
-        query = query.where(Job.location.ilike(f"%{location}%"))
-    if remote is not None:
-        query = query.where(Job.is_remote.is_(remote))
-    if salary_min is not None:
-        query = query.where(Job.salary_max >= salary_min)
+    conds = _search_filters(q, title, location, remote, salary_min, include_no_salary, posted_within_days)
     if date_posted_after is not None:
-        query = query.where(Job.date_posted >= date_posted_after)
+        conds.append(Job.date_posted >= date_posted_after)
     if industry:
-        # industry lives on the profile/company side, not a jobs column in
-        # V1.1 — filtered here via company/description match as a proxy
-        # until a normalized `jobs.industry` column lands (see roadmap).
-        query = query.where(Job.description.ilike(f"%{industry}%"))
+        # no jobs.industry column yet: description match as a proxy
+        conds.append(Job.description.ilike(f"%{industry}%"))
 
-    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
-    query = (
-        query.order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    jobs = (await db.execute(query)).scalars().all()
+    # Light first pass over every match, so the same job posted in several
+    # locations becomes ONE result (with "also in ...") before paginating.
+    light = (
+        await db.execute(
+            select(Job.id, Job.title, Job.company, Job.location)
+            .where(*conds)
+            .order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc())
+            .limit(5000)
+        )
+    ).all()
+    groups = collapse_duplicates(light, key=lambda r: group_key(r.title, r.company), location=lambda r: r.location)
+    total = len(groups)
+    page_groups = groups[(page - 1) * page_size: page * page_size]
+    also = {g.first.id: g.other_locations for g in page_groups}
+    ids = [g.first.id for g in page_groups]
+    jobs = (await db.execute(select(Job).where(Job.id.in_(ids)))).scalars().all() if ids else []
 
     profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one()
     match_rows = (
@@ -63,7 +106,7 @@ async def search_jobs(
                 JobMatch.profile_id == profile.id, JobMatch.job_id.in_([j.id for j in jobs])
             )
         )
-    ).scalars().all()
+    ).scalars().all() if jobs else []
     match_by_job = {m.job_id: m.match_score for m in match_rows}
 
     rankable = [
@@ -82,10 +125,50 @@ async def search_jobs(
     ordered_jobs = [jobs_by_id[jid] for jid in ranked_ids]
 
     return {
-        "data": [_job_summary(job, match_by_job.get(job.id, 0)) for job in ordered_jobs],
-        "meta": {"page": page, "page_size": page_size, "total": total},
+        "data": [
+            {**_job_summary(job, match_by_job.get(job.id, 0)), "also_in": also.get(job.id, [])}
+            for job in ordered_jobs
+        ],
+        "meta": {"page": page, "page_size": page_size, "total": total, "postings": len(light)},
         "error": None,
     }
+
+
+# Type-ahead reads every active job's title/company/location; cache that for
+# a few minutes so typing stays instant (the feed only changes every 6 hours).
+_SUGGEST_CACHE: dict[str, object] = {"at": 0.0, "rows": []}
+_SUGGEST_TTL = 300
+
+
+async def _suggest_rows(db: AsyncSession) -> list[JobRow]:
+    if time.monotonic() - _SUGGEST_CACHE["at"] < _SUGGEST_TTL and _SUGGEST_CACHE["rows"]:
+        return _SUGGEST_CACHE["rows"]
+    result = await db.execute(
+        select(Job.title, Job.company, Job.location, Job.is_remote, func.left(Job.description, 4000))
+        .where(Job.is_active.is_(True))
+    )
+    rows = [
+        JobRow(t or "", c, l, bool(r), f"{(t or '').lower()} {(d or '').lower()}")
+        for t, c, l, r, d in result.all()
+    ]
+    _SUGGEST_CACHE.update(at=time.monotonic(), rows=rows)
+    return rows
+
+
+@router.get("/suggest")
+async def suggest(
+    kind: str = Query(pattern="^(keyword|location)$"),
+    q: str = Query(default="", max_length=80),
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Type-ahead options for the Job Search boxes, each with how many jobs it finds."""
+    rows = await _suggest_rows(db)
+    if kind == "keyword":
+        items = keyword_suggestions(q, rows, list(SKILL_VOCABULARY))
+    else:
+        items = location_suggestions(q, rows)
+    return {"data": [i.as_dict() for i in items], "meta": {}, "error": None}
 
 
 @router.get("/hidden-gems")
@@ -198,12 +281,16 @@ async def recommended_jobs(
         if fit.score >= 30:
             scored.append((fit.score, job.date_posted or date.min, job, fit))
     scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    # one card per job: the same ad posted for several suburbs collapses into
+    # its best-scoring copy, with the other locations listed underneath
+    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company), location=lambda t: t[2].location)
     return {
         "data": [
-            {**_job_summary(job, 0), "fit_score": fit.score, "fit_reasons": fit.reasons}
-            for _, _, job, fit in scored[:limit]
+            {**_job_summary(g.first[2], 0), "fit_score": g.first[3].score, "fit_reasons": g.first[3].reasons,
+             "also_in": g.other_locations}
+            for g in groups[:limit]
         ],
-        "meta": {"candidates": len(scored)},
+        "meta": {"candidates": len(groups)},
         "error": None,
     }
 
