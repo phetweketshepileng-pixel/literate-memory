@@ -244,6 +244,7 @@
     return '<div class="also-in">Also advertised in ' + a.slice(0, 3).map(esc).join('; ') + (a.length > 3 ? ' and ' + (a.length - 3) + ' more' : '') + '</div>';
   }
   function viaLine(j) { return j && j.via === 'adzuna' ? '<div class="via">' + ADZUNA_LINK + '</div>' : ''; }
+  function viaInline(j) { return j && j.via === 'adzuna' ? ' · <span class="via">' + ADZUNA_LINK + '</span>' : ''; }
 
   // Shared tooltip for every chart: positioned near the pointer or the focused bar.
   var tip = $('chartTip');
@@ -323,8 +324,8 @@
   function recCard(j) {
     var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.industry && j.industry !== 'Other' ? j.industry : ''].filter(Boolean).map(esc).join(' · ');
     return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
-      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + '</div>' +
-      alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
+      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + viaInline(j) + '</div>' +
+      alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
       '<div class="rec-actions"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View</button><button class="btn btn-moss btn-sm" data-save-job="' + esc(j.id) + '">Save</button></div></div>';
   }
   $('dashRecommended').addEventListener('click', function (e) {
@@ -543,8 +544,8 @@
     var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
-      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
-      alsoIn(j) + viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
+      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
+      alsoIn(j) + '</div><div class="job-side">' + score + '<button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>';
   }
   function searchParams() {
     var f = $('jobSearchForm'), q = [];
