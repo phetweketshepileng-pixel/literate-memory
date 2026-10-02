@@ -119,6 +119,11 @@
             <details class="chart-table"><summary>View as table</summary><div id="chartRegionsTable"></div></details>
           </div>
           <div class="panel chart-card">
+            <div class="section-title">Jobs by industry</div>
+            <div class="chart" id="chartIndustry"></div>
+            <details class="chart-table"><summary>View as table</summary><div id="chartIndustryTable"></div></details>
+          </div>
+          <div class="panel chart-card">
             <div class="section-title">Your weekly activity <span class="muted">(applications submitted)</span></div>
             <div class="chart" id="chartWeekly"></div>
             <details class="chart-table"><summary>View as table</summary><div id="chartWeeklyTable"></div></details>
@@ -217,6 +222,9 @@
             <button class="btn btn-primary sf-go" type="submit">Search</button>
           </div>
           <div class="sf-row sf-filters">
+            <label class="sf-mini">Industry
+              <select name="industry" id="jobIndustry"><option value="">All industries</option></select>
+            </label>
             <label class="sf-mini">Salary (per year)
               <select name="salary_min"><option value="">Any salary</option><option value="200000">R200k+</option><option value="300000">R300k+</option><option value="400000">R400k+</option><option value="500000">R500k+</option><option value="600000">R600k+</option><option value="800000">R800k+</option><option value="1000000">R1m+</option></select>
             </label>

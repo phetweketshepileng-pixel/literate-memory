@@ -253,7 +253,7 @@
     var el = $(id);
     var total = items.reduce(function (s, i) { return s + i.value; }, 0);
     if (!total) { el.innerHTML = '<div class="chart-empty">' + esc(emptyMsg) + '</div>'; return; }
-    var W = 320, H = 170, padL = 28, padB = 22, padT = 16, plotW = W - padL, plotH = H - padB - padT;
+    var W = 460, H = 190, padL = 30, padB = 22, padT = 16, plotW = W - padL, plotH = H - padB - padT;
     var max = niceMax(Math.max.apply(null, items.map(function (i) { return i.value; })));
     var slot = plotW / items.length, bw = Math.min(24, slot - 2);
     var maxIdx = 0; items.forEach(function (it, i) { if (it.value > items[maxIdx].value) maxIdx = i; });
@@ -277,9 +277,10 @@
   function barList(id, items, unit) {
     var el = $(id);
     if (!items.length) { el.innerHTML = '<div class="chart-empty">No jobs yet.</div>'; return; }
-    var W = 320, rowH = 22, gap = 6, padL = 116, padR = 40, H = items.length * (rowH + gap);
+    var longest = Math.max.apply(null, items.map(function (i) { return String(i.label).length; }));
+    var W = 460, rowH = 22, gap = 6, padL = Math.min(190, Math.max(90, Math.round(longest * 6.4) + 12)), padR = 48, H = items.length * (rowH + gap);
     var max = Math.max.apply(null, items.map(function (i) { return i.value; }));
-    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Jobs by region">';
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(el.parentNode.querySelector('.section-title').textContent) + '">';
     items.forEach(function (it, i) {
       var y = i * (rowH + gap), bh = 16, by = y + (rowH - bh) / 2, w = Math.max(2, (W - padL - padR) * it.value / max);
       s += '<rect class="hit" tabindex="0" x="0" y="' + y + '" width="' + W + '" height="' + rowH + '" data-tip-v="' + esc(fmtN(it.value) + ' ' + unit) + '" data-tip-l="' + esc(it.label) + '" aria-label="' + esc(it.label + ': ' + it.value + ' ' + unit) + '"/>';
@@ -292,7 +293,7 @@
   }
 
   function recCard(j) {
-    var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
+    var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.industry && j.industry !== 'Other' ? j.industry : ''].filter(Boolean).map(esc).join(' · ');
     return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
       '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + '</div>' +
       alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
@@ -345,6 +346,11 @@
       barList('chartRegions', regions.map(function (r) { return { label: r.label, value: r.count }; }), 'jobs');
       $('chartRegionsTable').innerHTML = tableHtml(['Region', 'Jobs'], s.by_region.map(function (r) { return [r.label, r.count]; }));
 
+      var inds = (s.by_industry || []).filter(function (r) { return r.label !== 'Other'; }).slice(0, 8);
+      var otherInd = (s.by_industry || []).reduce(function (a, r) { return a + r.count; }, 0) - inds.reduce(function (a, r) { return a + r.count; }, 0);
+      if (otherInd) inds.push({ label: 'Other', count: otherInd });
+      barList('chartIndustry', inds.map(function (r) { return { label: r.label, value: r.count }; }), 'jobs');
+      $('chartIndustryTable').innerHTML = tableHtml(['Industry', 'Jobs'], (s.by_industry || []).map(function (r) { return [r.label, r.count]; }));
       var src = s.by_source.map(function (r) { return esc(r.label) + ' ' + fmtN(r.count); }).join(' · ');
       $('dashSources').innerHTML = 'Where your feed comes from: ' + src + '. Refreshed every 6 hours. South African listings: ' + ADZUNA_LINK + '.';
     }).catch(function (e) { $('chartDaily').innerHTML = '<div class="chart-empty">' + esc(e.message) + '</div>'; });
@@ -377,9 +383,11 @@
         $('dashGem').innerHTML = '<div class="panel"><div class="section-title" style="margin:0 0 6px;">💎 Hidden gem of the day</div><div class="small muted">None today. Hidden gems are jobs posted only on a company\'s own careers page, with few applicants. They appear here as soon as the feed finds one.</div></div>';
         return;
       }
-      var g = gems[new Date().getDate() % Math.min(gems.length, 5)];
+      var g = gems[0]; // best fit for this profile, newest first
       $('dashGem').innerHTML = '<div class="hidden-gem-strip"><span class="pill pill-moss">💎 Hidden gem of the day</span>' +
         '<div style="font-weight:600; margin-top:8px;">' + esc(g.title) + (g.company ? ' — ' + esc(g.company) : '') + '</div><div class="small muted">' + esc(g.location || '') + (g.competition_score ? ' · ' + esc(label(g.competition_score)) + ' competition' : '') + '</div>' +
+        (g.also_in && g.also_in.length ? '<div class="small muted">Also in ' + g.also_in.slice(0, 2).map(esc).join('; ') + '</div>' : '') +
+        '<div class="small muted" style="margin-top:6px;">Posted only on the employer\'s own careers page' + (gems.length > 1 ? ' · <a href="#" data-nav="jobs">' + (gems.length - 1) + ' more</a>' : '') + '</div>' +
         '<button class="btn btn-moss btn-sm" style="margin-top:10px;" data-job="' + esc(g.id) + '">View job</button></div>';
     }).catch(function () { $('dashGem').innerHTML = ''; });
   };
@@ -499,12 +507,12 @@
     var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
-      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
+      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
       alsoIn(j) + viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
   }
   function searchParams() {
     var f = $('jobSearchForm'), q = [];
-    ['q', 'location', 'salary_min', 'remote', 'posted_within_days'].forEach(function (n) {
+    ['q', 'location', 'industry', 'salary_min', 'remote', 'posted_within_days'].forEach(function (n) {
       var v = (f.elements[n].value || '').trim(); if (v) q.push(n + '=' + encodeURIComponent(v));
     });
     if (f.elements.salary_min.value && !f.elements.include_no_salary.checked) q.push('include_no_salary=false');
@@ -525,7 +533,7 @@
       $('jobPager').innerHTML = pages > 1 ? '<button class="btn btn-ghost btn-sm" ' + (jobPage <= 1 ? 'disabled' : '') + ' data-page="' + (jobPage - 1) + '">‹ Prev</button><span class="small muted">Page ' + jobPage + ' of ' + pages + '</span><button class="btn btn-ghost btn-sm" ' + (jobPage >= pages ? 'disabled' : '') + ' data-page="' + (jobPage + 1) + '">Next ›</button>' : '';
     }).catch(function (e) { $('jobList').innerHTML = empty(esc(e.message)); });
   }
-  ['salary_min', 'remote', 'posted_within_days', 'include_no_salary'].forEach(function (n) {
+  ['industry', 'salary_min', 'remote', 'posted_within_days', 'include_no_salary'].forEach(function (n) {
     $('jobSearchForm').elements[n].addEventListener('change', function () { searchJobs(1); });
   });
   $('jobClear').onclick = function () {
@@ -576,7 +584,17 @@
   attachSuggest($('jobLoc'), $('jobLocList'), 'location');
   $('jobPager').addEventListener('click', function (e) { var p = e.target.dataset && e.target.dataset.page; if (p) searchJobs(Number(p)); });
   $('jobSearchForm').addEventListener('submit', function (e) { e.preventDefault(); searchJobs(1); });
+  function loadIndustries() {
+    get('/jobs/industries').then(function (list) {
+      var sel = $('jobIndustry'), cur = sel.value;
+      sel.innerHTML = '<option value="">All industries</option>' + list.map(function (i) {
+        return '<option value="' + esc(i.label) + '">' + esc(i.label) + ' (' + i.count.toLocaleString('en-ZA') + ')</option>';
+      }).join('');
+      sel.value = cur;
+    }).catch(function () {});
+  }
   loaders.jobs = function () {
+    loadIndustries();
     searchJobs(jobPage);
     get('/jobs/hidden-gems').then(function (g) {
       $('gemList').innerHTML = g.length ? '<div class="section-title">💎 Hidden gems — posted directly, low competition</div>' + g.slice(0, 3).map(jobCard).join('') + '<div class="section-title" style="margin-top:18px;">All results</div>' : '';
