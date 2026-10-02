@@ -95,8 +95,34 @@
     $('authPassword').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     $('authError').style.display = 'none';
   }
-  $('tabLogin').onclick = function () { setAuthMode('login'); };
-  $('tabRegister').onclick = function () { setAuthMode('register'); };
+  function showReset(on) {
+    $('authForm').style.display = on ? 'none' : '';
+    $('resetForm').style.display = on ? '' : 'none';
+    $('forgotLink').style.display = on ? 'none' : '';
+    $('authError').style.display = 'none'; $('resetError').style.display = 'none';
+    $('authTitle').textContent = on ? 'Reset your password' : (authMode === 'login' ? 'Welcome back' : 'Create your account');
+    document.querySelector('.auth-tabs').style.display = on ? 'none' : '';
+    $('authSub').style.display = on ? 'none' : '';
+    if (on) { $('resetEmail').value = $('authEmail').value; $('resetEmail').focus(); }
+  }
+  $('forgotLink').onclick = function () { showReset(true); };
+  $('resetBack').onclick = function () { showReset(false); };
+  $('resetForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = $('resetError'), pw = $('resetPw').value;
+    if (pw !== $('resetPw2').value) { err.textContent = 'The two new passwords are different.'; err.style.display = 'block'; return; }
+    var btn = $('resetSubmit'); btn.disabled = true; err.style.display = 'none';
+    api('POST', '/auth/reset-password', { email: $('resetEmail').value.trim(), reset_code: $('resetCode').value, new_password: pw }).then(function () {
+      $('authEmail').value = $('resetEmail').value.trim();
+      $('resetCode').value = $('resetPw').value = $('resetPw2').value = '';
+      setAuthMode('login'); showReset(false);
+      toast('Password changed. Sign in with your new password.');
+      $('authPassword').focus();
+    }).catch(function (e2) { err.textContent = e2.message; err.style.display = 'block'; })
+      .finally(function () { btn.disabled = false; });
+  });
+  $('tabLogin').onclick = function () { setAuthMode('login'); showReset(false); };
+  $('tabRegister').onclick = function () { setAuthMode('register'); showReset(false); };
   $('authForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var email = $('authEmail').value.trim(), pw = $('authPassword').value;
