@@ -127,15 +127,18 @@ def test_operations_to_it_management_scores_higher_than_call_centre_to_data_anal
 
 def test_rank_target_domains_returns_all_five_sorted_descending():
     ranked = rank_target_domains_by_readiness("operations", set(), set(), 5)
-    assert len(ranked) == 5
+    from app.modules.career_transition.domain_knowledge import TARGET_DOMAINS
+    assert len(ranked) == len(TARGET_DOMAINS)
     scores = [result.readiness_score for _, result in ranked]
     assert scores == sorted(scores, reverse=True)
 
 
-def test_rank_target_domains_operations_favors_it_management_or_pm():
-    ranked = rank_target_domains_by_readiness("operations", set(), set(), 5)
-    top_domain = ranked[0][0]
-    assert top_domain in ("it_management", "project_management")
+def test_rank_target_domains_operations_favors_its_own_field_then_it_or_pm():
+    ranked = [d for d, _ in rank_target_domains_by_readiness("operations", set(), set(), 5)]
+    assert ranked[0] in ("operations_management", "current_field")
+    transitions = [d for d in ranked if d in ("business_analysis", "systems_analysis", "data_analysis",
+                                                "it_management", "project_management")]
+    assert transitions[0] in ("it_management", "project_management")
 
 
 # ===================== Experience reframing =====================
@@ -186,9 +189,8 @@ def test_highest_leverage_gap_identifies_unclosed_strong_mapping():
 
 def test_recommend_pathway_picks_secondary_when_close():
     rec = recommend_pathway("operations", set(), set(), years_in_source_domain=5)
-    assert rec.primary_target_domain in (
-        "it_management", "project_management", "business_analysis", "systems_analysis", "data_analysis"
-    )
+    assert rec.primary_target_domain in ("operations_management", "current_field")
+    assert rec.secondary_target_domain in ("operations_management", "current_field")
     assert isinstance(rec.recommended_certifications, list)
 
 
@@ -203,3 +205,18 @@ def test_recommend_pathway_no_secondary_when_clear_leader():
         readiness_gap_threshold=1,  # near-zero tolerance forces a clear winner
     )
     assert rec.primary_target_domain == "it_management"
+
+
+def test_growing_in_current_field_pathways_exist_for_every_source():
+    from app.modules.career_transition.domain_knowledge import (
+        BASE_AFFINITY_MATRIX, DOMAIN_LABELS, SOURCE_DOMAINS, TARGET_DOMAINS, TARGET_DOMAIN_CERTIFICATIONS)
+    from app.modules.career_transition.service import get_mappings_for_pathway
+    from app.modules.interview_prep.domain_knowledge import TECHNICAL_QUESTION_BANK
+    for target in TARGET_DOMAINS:
+        assert len(target) <= 30 and target in DOMAIN_LABELS
+        assert target in TARGET_DOMAIN_CERTIFICATIONS and target in TECHNICAL_QUESTION_BANK
+        for source in SOURCE_DOMAINS:
+            assert (source, target) in BASE_AFFINITY_MATRIX
+    for source in SOURCE_DOMAINS:
+        assert get_mappings_for_pathway(source, "current_field")
+    assert get_mappings_for_pathway("collections", "collections_management")
