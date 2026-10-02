@@ -82,6 +82,82 @@ TECHNICAL_QUESTION_BANK: dict[str, dict[str, list[str]]] = {
     },
 }
 
+# Growing within the same line of work.
+TECHNICAL_QUESTION_BANK.update({
+    "current_field": {
+        "junior": [
+            "What does a strong week look like in your current team, and how do you measure it?",
+            "Which part of your current job would you most like to take more responsibility for, and why?",
+        ],
+        "mid": [
+            "How would you take over an under-performing team and turn it around in 90 days?",
+            "Which three measures would you report to your manager every week, and why those?",
+        ],
+        "senior": [
+            "How would you set targets for several team leaders whose teams handle different kinds of work?",
+            "Describe how you'd build a business case for more staff or a new system in your area.",
+        ],
+    },
+    "collections_management": {
+        "junior": [
+            "What is a promise-to-pay, and how would you improve a team's kept-promise rate?",
+            "How do you decide which accounts to call first on a given day?",
+        ],
+        "mid": [
+            "How would you design a collection strategy for early arrears versus accounts 90+ days down?",
+            "What do roll rates tell you, and what would you do if your 30-to-60 roll rate jumped?",
+            "How does the National Credit Act shape what a collections team may and may not do?",
+        ],
+        "senior": [
+            "How would you decide between collecting in-house, using an agency, or selling a debt book?",
+            "How would you set up champion/challenger testing for a collections strategy?",
+            "Walk me through how you'd forecast monthly recoveries and resource the team to hit them.",
+        ],
+    },
+    "credit_risk": {
+        "junior": [
+            "What is the difference between a probability of default and a loss given default?",
+            "Which information would you look at before approving a personal loan?",
+        ],
+        "mid": [
+            "How would you monitor whether a credit portfolio is getting riskier?",
+            "What is a vintage analysis, and what can it show that a monthly arrears report can't?",
+        ],
+        "senior": [
+            "How would you change credit policy if early-arrears rates on new business doubled?",
+            "How do collections results feed back into credit scoring and approval rules?",
+        ],
+    },
+    "operations_management": {
+        "junior": [
+            "What is a service level, and how would you know if your team is meeting it?",
+            "How would you handle a day when half the team is absent?",
+        ],
+        "mid": [
+            "How do you find the biggest bottleneck in a process you've just inherited?",
+            "How would you balance productivity targets with quality and staff wellbeing?",
+        ],
+        "senior": [
+            "How would you plan staffing for next year's demand with a fixed budget?",
+            "Describe how you'd run a process-improvement programme across several teams.",
+        ],
+    },
+    "customer_experience": {
+        "junior": [
+            "What is the difference between CSAT, NPS and first-contact resolution?",
+            "How would you handle a customer who is angry about something your team didn't cause?",
+        ],
+        "mid": [
+            "How would you use complaint data to decide what to fix first?",
+            "How would you map a customer journey to find the points that cause most complaints?",
+        ],
+        "senior": [
+            "How would you build a business case for a customer-experience improvement?",
+            "How do you balance cost-cutting targets with keeping customers satisfied?",
+        ],
+    },
+})
+
 # Behavioral questions keyed by TARGET COMPETENCY (same vocabulary as
 # Career Transition's transferable_skill_mappings target_competency field)
 # — this is the join point that lets a question be paired with the user's
@@ -124,6 +200,37 @@ BEHAVIORAL_QUESTION_BANK: dict[str, list[str]] = {
         "Describe troubleshooting an issue that spanned multiple systems.",
     ],
 }
+
+BEHAVIORAL_QUESTION_BANK.update({
+    "people leadership": [
+        "Tell me about a time you turned around a team member's poor performance.",
+        "Describe how you kept a team motivated through a difficult month.",
+    ],
+    "performance management": [
+        "Tell me about a time your team was off target mid-month. What did you change?",
+        "Describe a measure you introduced that changed how your team worked.",
+    ],
+    "portfolio strategy": [
+        "Tell me about a time you changed how accounts were prioritised, and what happened.",
+        "Describe how you used data to decide where your team should focus.",
+    ],
+    "regulatory compliance": [
+        "Tell me about a time you stopped something that would have broken a rule or regulation.",
+        "Describe how you made sure your team followed a new policy or law.",
+    ],
+    "credit risk analysis": [
+        "Tell me about a time you spotted a worrying trend in a portfolio early.",
+        "Describe a decision you made where the numbers and your instinct disagreed.",
+    ],
+    "process improvement": [
+        "Tell me about a process you improved and how you measured the result.",
+        "Describe a change you made that people resisted at first.",
+    ],
+    "customer experience improvement": [
+        "Tell me about a recurring customer complaint you got to the root of.",
+        "Describe a time you changed a process because of customer feedback.",
+    ],
+})
 
 GENERIC_BEHAVIORAL_QUESTIONS: list[str] = [
     "Tell me about a time you had to learn something completely new quickly.",
