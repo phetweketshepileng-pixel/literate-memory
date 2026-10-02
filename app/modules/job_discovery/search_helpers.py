@@ -200,11 +200,19 @@ def location_suggestions(query: str, rows: list[JobRow], limit: int = 8) -> list
 
 
 # ------------------------------------------------------------ duplicate groups
-def group_key(title: str | None, company: str | None) -> tuple[str, str]:
-    """Same job advertised in several places: same cleaned title + same company."""
+DESCRIPTION_KEY_CHARS = 300
+
+
+def group_key(title: str | None, company: str | None, description: str | None = None) -> tuple[str, str]:
+    """Same job advertised in several places: same title + same company.
+    When the ad doesn't name the employer (typical of recruiters), the same
+    title + the same opening text of the description identifies a re-post."""
     # full title on purpose: "Analyst - Credit" and "Analyst - Payments" at one
     # company are different jobs; only exact re-posts are merged
-    return (_norm(title), _norm(company))
+    if _norm(company):
+        return (_norm(title), _norm(company))
+    desc = re.sub(r"[^a-z0-9]+", " ", (description or "")[:DESCRIPTION_KEY_CHARS].lower()).strip()
+    return (_norm(title), "desc:" + desc) if len(desc) >= 40 else (_norm(title), "")
 
 
 @dataclass

@@ -85,13 +85,13 @@ async def search_jobs(
     # locations becomes ONE result (with "also in ...") before paginating.
     light = (
         await db.execute(
-            select(Job.id, Job.title, Job.company, Job.location)
+            select(Job.id, Job.title, Job.company, Job.location, func.left(Job.description, 300).label("description"))
             .where(*conds)
             .order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc())
             .limit(20000)
         )
     ).all()
-    groups = collapse_duplicates(light, key=lambda r: group_key(r.title, r.company), location=lambda r: r.location)
+    groups = collapse_duplicates(light, key=lambda r: group_key(r.title, r.company, r.description), location=lambda r: r.location)
     total = len(groups)
     page_groups = groups[(page - 1) * page_size: page * page_size]
     also = {g.first.id: g.other_locations for g in page_groups}
@@ -190,7 +190,7 @@ async def hidden_gems(
          for j in jobs),
         key=lambda t: (t[0], t[1]), reverse=True,
     )
-    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company), location=lambda t: t[2].location)
+    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company, t[2].description), location=lambda t: t[2].location)
     return {
         "data": [{**_job_summary(g.first[2], 0), "fit_score": g.first[0], "also_in": g.other_locations} for g in groups[:50]],
         "meta": {"total": len(groups)},
@@ -322,7 +322,7 @@ async def recommended_jobs(
     scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
     # one card per job: the same ad posted for several suburbs collapses into
     # its best-scoring copy, with the other locations listed underneath
-    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company), location=lambda t: t[2].location)
+    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company, t[2].description), location=lambda t: t[2].location)
     return {
         "data": [
             {**_job_summary(g.first[2], 0), "fit_score": g.first[3].score, "fit_reasons": g.first[3].reasons,
