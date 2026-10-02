@@ -470,8 +470,16 @@
   });
   $('cvCurrent').addEventListener('click', function (e) {
     var b = e.target.closest('[data-download]'); if (!b) return;
-    fetch(API + '/profile/documents/' + b.dataset.download + '/download', { headers: { Authorization: 'Bearer ' + session.access } })
-      .then(function (r) { if (!r.ok) throw new Error('Download failed (' + r.status + ')'); return r.blob(); })
+    var url = API + '/profile/documents/' + b.dataset.download + '/download';
+    var getFile = function () { return fetch(url, { headers: { Authorization: 'Bearer ' + session.access } }); };
+    // the sign-in pass expires every 15 minutes: renew it once and retry, like api() does
+    getFile()
+      .then(function (r) { return r.status === 401 ? doRefresh().then(getFile, function () { return r; }) : r; })
+      .then(function (r) {
+        if (r.status === 401) { clearSession(); showAuth(); throw new Error('Your session expired — please sign in again.'); }
+        if (!r.ok) throw new Error('Download failed (' + r.status + ')');
+        return r.blob();
+      })
       .then(function (blob) {
         var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = b.dataset.name || 'cv';
         document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
