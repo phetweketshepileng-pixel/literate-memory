@@ -124,14 +124,20 @@ CLEANUP = [
     """UPDATE jobs SET company = sub.v FROM (
          SELECT j.id, (SELECT e.value FROM jsonb_each_text(j.raw_payload) e
                        WHERE e.key ILIKE '%company%' AND e.key NOT ILIKE '%logo%' AND e.key NOT ILIKE '%url%'
-                         AND e.key NOT ILIKE '%link%' AND length(e.value) BETWEEN 1 AND 200 LIMIT 1) AS v
+                         AND e.key NOT ILIKE '%link%' AND length(e.value) BETWEEN 1 AND 200
+                         AND left(e.value, 1) NOT IN ('{', '[') LIMIT 1) AS v
          FROM jobs j WHERE j.company IS NULL) sub
        WHERE jobs.id = sub.id AND sub.v IS NOT NULL""",
     """UPDATE jobs SET location = sub.v FROM (
          SELECT j.id, (SELECT e.value FROM jsonb_each_text(j.raw_payload) e
-                       WHERE (e.key ILIKE '%location%' OR e.key ILIKE '%region%') AND length(e.value) BETWEEN 1 AND 200 LIMIT 1) AS v
+                       WHERE (e.key ILIKE '%location%' OR e.key ILIKE '%region%') AND length(e.value) BETWEEN 1 AND 200
+                         AND left(e.value, 1) NOT IN ('{', '[') LIMIT 1) AS v
          FROM jobs j WHERE j.location = 'Remote') sub
        WHERE jobs.id = sub.id AND sub.v IS NOT NULL""",
+    # undo earlier runs that copied a raw data object (e.g. an Adzuna ad with
+    # no employer name) into company/location
+    "UPDATE jobs SET company = NULL WHERE left(company, 1) IN ('{', '[')",
+    "UPDATE jobs SET location = NULL WHERE left(location, 1) IN ('{', '[')",
     # feed summaries are HTML — keep plain text for the UI
     "UPDATE jobs SET description = trim(regexp_replace(regexp_replace(description, '<[^>]+>', ' ', 'g'), '&nbsp;|&amp;|&#39;|&quot;', ' ', 'g')) WHERE description LIKE '%<%'",
     # WWR titles look like 'Company: Role' with no author field
