@@ -79,8 +79,7 @@ async def search_jobs(
     if date_posted_after is not None:
         conds.append(Job.date_posted >= date_posted_after)
     if industry:
-        # no jobs.industry column yet: description match as a proxy
-        conds.append(Job.description.ilike(f"%{industry}%"))
+        conds.append(Job.industry == industry)
 
     # Light first pass over every match, so the same job posted in several
     # locations becomes ONE result (with "also in ...") before paginating.
@@ -89,7 +88,7 @@ async def search_jobs(
             select(Job.id, Job.title, Job.company, Job.location)
             .where(*conds)
             .order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc())
-            .limit(5000)
+            .limit(20000)
         )
     ).all()
     groups = collapse_duplicates(light, key=lambda r: group_key(r.title, r.company), location=lambda r: r.location)
@@ -175,12 +174,55 @@ async def suggest(
 async def hidden_gems(
     user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)
 ):
+    """Jobs posted only on employers' own careers pages. Ordered by how well
+    they fit the user (quick fit), then newest; repeats of one ad grouped."""
     jobs = (
         await db.execute(
-            select(Job).where(Job.is_hidden_gem.is_(True), Job.is_active.is_(True)).limit(50)
+            select(Job)
+            .where(Job.is_hidden_gem.is_(True), Job.is_active.is_(True))
+            .order_by(Job.date_posted.desc().nulls_last())
+            .limit(2000)
         )
     ).scalars().all()
-    return {"data": [_job_summary(job, 0) for job in jobs], "meta": {}, "error": None}
+    prefs = await _fit_prefs(db, user_id)
+    scored = sorted(
+        ((quick_fit(j.title, j.description, j.location, j.is_remote, j.date_posted, prefs).score, j.date_posted or date.min, j)
+         for j in jobs),
+        key=lambda t: (t[0], t[1]), reverse=True,
+    )
+    groups = collapse_duplicates(scored, key=lambda t: group_key(t[2].title, t[2].company), location=lambda t: t[2].location)
+    return {
+        "data": [{**_job_summary(g.first[2], 0), "fit_score": g.first[0], "also_in": g.other_locations} for g in groups[:50]],
+        "meta": {"total": len(groups)},
+        "error": None,
+    }
+
+
+@router.get("/industries")
+async def industries(user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """Industries in the current feed with job counts, for the search filter."""
+    rows = (
+        await db.execute(
+            select(Job.industry, func.count()).where(Job.is_active.is_(True), Job.industry.is_not(None))
+            .group_by(Job.industry).order_by(func.count().desc())
+        )
+    ).all()
+    return {"data": [{"label": i, "count": n} for i, n in rows], "meta": {}, "error": None}
+
+
+async def _fit_prefs(db: AsyncSession, user_id: UUID) -> FitInput:
+    profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one()
+    skills = list((await db.execute(select(Skill.name).where(Skill.profile_id == profile.id))).scalars())
+    desired = list(profile.desired_roles or [])
+    if profile.current_role and not desired:
+        desired = [profile.current_role]
+    return FitInput(
+        desired_roles=desired,
+        skills=skills,
+        location_preferences=list(profile.location_preferences or []),
+        work_mode_preference=profile.work_mode_preference,
+        today=datetime.now(_SAST).date(),
+    )
 
 
 # South Africa Standard Time — "today" on the dashboard means the user's day
@@ -191,6 +233,8 @@ def _source_group(source_name: str | None) -> str:
     name = source_name or ""
     if name.startswith("Adzuna"):
         return "SA job boards (via Adzuna)"
+    if name.startswith("Careers:"):
+        return "Employers' own careers pages"
     if name:
         return "International remote boards"
     return "Other"
@@ -203,7 +247,7 @@ async def job_stats(
     """Feed overview for the dashboard: how many jobs, how fresh, where from."""
     rows = (
         await db.execute(
-            select(Job.created_at, Job.location, Job.is_remote, Job.is_hidden_gem, JobSource.name)
+            select(Job.created_at, Job.location, Job.is_remote, Job.is_hidden_gem, JobSource.name, Job.industry)
             .join(JobSource, JobSource.id == Job.source_id, isouter=True)
             .where(Job.is_active.is_(True))
         )
@@ -211,9 +255,10 @@ async def job_stats(
     today = datetime.now(_SAST).date()
     days = [today - timedelta(days=i) for i in range(13, -1, -1)]
     per_day = Counter()
-    regions, sources = Counter(), Counter()
+    regions, sources, industries_ = Counter(), Counter(), Counter()
     new_today = new_week = gems = 0
-    for created_at, location, is_remote, is_gem, source_name in rows:
+    for created_at, location, is_remote, is_gem, source_name, industry in rows:
+        industries_[industry or "Other"] += 1
         d = created_at.astimezone(_SAST).date() if created_at else None
         if d:
             per_day[d] += 1
@@ -231,6 +276,7 @@ async def job_stats(
             "added_per_day": [{"date": d.isoformat(), "count": per_day.get(d, 0)} for d in days],
             "by_region": [{"label": k, "count": v} for k, v in regions.most_common()],
             "by_source": [{"label": k, "count": v} for k, v in sources.most_common()],
+            "by_industry": [{"label": k, "count": v} for k, v in industries_.most_common()],
         },
         "meta": {"timezone": "Africa/Johannesburg"},
         "error": None,
@@ -246,17 +292,7 @@ async def recommended_jobs(
     """Top matches for the dashboard, ranked by the rule-based quick-fit score
     (see insights.quick_fit). Jobs already in the user's pipeline are left out."""
     profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one()
-    skills = list((await db.execute(select(Skill.name).where(Skill.profile_id == profile.id))).scalars())
-    desired = list(profile.desired_roles or [])
-    if profile.current_role and not desired:
-        desired = [profile.current_role]
-    prefs = FitInput(
-        desired_roles=desired,
-        skills=skills,
-        location_preferences=list(profile.location_preferences or []),
-        work_mode_preference=profile.work_mode_preference,
-        today=datetime.now(_SAST).date(),
-    )
+    prefs = await _fit_prefs(db, user_id)
     if not prefs.desired_roles and not prefs.skills:
         return {"data": [], "meta": {"reason": "no_preferences"}, "error": None}
 
@@ -264,14 +300,17 @@ async def recommended_jobs(
         (await db.execute(select(Application.job_id).where(Application.profile_id == profile.id))).scalars()
     )
     cutoff = prefs.today - timedelta(days=45)
-    jobs = (
-        await db.execute(
-            select(Job)
-            .where(Job.is_active.is_(True), or_(Job.date_posted.is_(None), Job.date_posted >= cutoff))
-            .order_by(Job.date_posted.desc().nulls_last())
-            .limit(5000)
-        )
-    ).scalars().all()
+    # the feed covers every industry, so only score jobs whose title shares a
+    # word with a target role (plus the newest few hundred for skill matches)
+    role_words = {w for r in prefs.desired_roles for w in re.findall(r"[a-z]{3,}", r.lower())} - {"and", "the", "for", "senior", "junior"}
+    base = select(Job).where(Job.is_active.is_(True), or_(Job.date_posted.is_(None), Job.date_posted >= cutoff))
+    newest = base.order_by(Job.date_posted.desc().nulls_last(), Job.created_at.desc()).limit(300)
+    jobs = list((await db.execute(newest)).scalars().all())
+    if role_words:
+        titled = base.where(or_(*[Job.title.ilike(f"%{w}%") for w in role_words])).order_by(
+            Job.date_posted.desc().nulls_last()).limit(4000)
+        seen = {j.id for j in jobs}
+        jobs += [j for j in (await db.execute(titled)).scalars().all() if j.id not in seen]
 
     scored = []
     for job in jobs:
@@ -318,6 +357,7 @@ def _job_summary(job: Job, match_score: int) -> dict:
         "competition_score": job.competition_score,
         "match_score": match_score,
         "via": "adzuna" if "adzuna." in (job.apply_url or "") else None,
+        "industry": job.industry,
     }
 
 

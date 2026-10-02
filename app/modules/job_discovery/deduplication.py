@@ -37,10 +37,17 @@ async def find_duplicate(db: AsyncSession, candidate: NormalizedJob) -> Job | No
     if not canon_company or not canon_title:
         return None  # not enough signal to safely dedupe; let it insert as new
 
-    # Step 2: candidate lookup within the rolling window, same canonical key
+    # Step 2: candidate lookup within the rolling window, same canonical key.
+    # Narrow in SQL first (company and title must share their first word)
+    # so this stays fast when the feed holds tens of thousands of jobs;
+    # the exact canonical comparison below still decides.
+    company_word = canon_company.split()[0]
+    title_word = canon_title.split()[0]
     result = await db.execute(
         select(Job).where(
             Job.date_posted >= text(f"CURRENT_DATE - INTERVAL '{CANDIDATE_WINDOW_DAYS} days'"),
+            Job.company.ilike(f"%{company_word}%"),
+            Job.title.ilike(f"%{title_word}%"),
         )
     )
     candidates = [
