@@ -16,7 +16,9 @@
     var t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : ''; t.style.display = 'block';
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.style.display = 'none'; }, isErr ? 6000 : 3000);
   }
-  function label(domain) { return String(domain || '').replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+  function label(domain) {
+    if (typeof domains !== 'undefined' && domains.labels && domains.labels[domain]) return domains.labels[domain];
+    return String(domain || '').replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
   function money(n) { return n == null ? '' : 'R' + Math.round(n / 1000) + 'k'; }
   function pct(v) { return v == null ? '—' : (v <= 1 ? Math.round(v * 100) : Math.round(v)) + '%'; }
   function errMsg(body, status) {
