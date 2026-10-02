@@ -29,22 +29,8 @@ SOURCES = {
 #   every category     <= 33 pages + 1 lookup, daily -> 34/day
 #   total              <= ~77/day, ~2,300/month (searches stop early on a short page)
 A = {"adapter_type": "adzuna", "country": "za", "max_days_old": 30}
-ROLE_SEARCHES = [  # (keywords, location or None for all of SA, max pages of 50) — refreshed twice a day
-    ("business analyst", "Gauteng", 3),
-    ("business analyst", "Western Cape", 1),
-    ("business analyst", None, 1),
-    ("systems analyst", "Gauteng", 1),
-    ("process analyst", None, 1),
-    ("process improvement", "Gauteng", 1),
-    ("operations analyst", "Gauteng", 1),
-    ("data analyst", "Gauteng", 2),
-    ("business intelligence", "Gauteng", 1),
-    ("credit risk", "Gauteng", 1),
-    ("IT manager", "Gauteng", 1),
-    ("operations manager", "Gauteng", 2),
-    ("project coordinator", "Gauteng", 1),
-    ("collections manager", None, 1),
-]
+# Role searches come from what people list under "Desired roles" on their
+# profile (see app/modules/job_discovery/search_plan.py) — refreshed twice a day.
 INDUSTRY_SEARCHES = [  # industries Adzuna has no category for — refreshed daily
     ("bank", "Gauteng", 1), ("bank", "Western Cape", 1), ("insurance", None, 1), ("telematics", None, 1),
     ("government", None, 1), ("municipality", None, 1), ("call centre", None, 1),
@@ -55,17 +41,31 @@ CATEGORY_PAGE_BUDGET = 33
 PRIORITY_CATEGORIES = ("accounting-finance-jobs", "it-jobs", "customer-services-jobs", "admin-jobs",
                        "sales-jobs", "consultancy-jobs", "hr-jobs", "logistics-warehouse-jobs", "engineering-jobs")
 CATEGORY_PREFIX = "Adzuna SA category: "
-assert sum(p for *_, p in ROLE_SEARCHES) <= 18 and sum(p for *_, p in INDUSTRY_SEARCHES) <= 7
+assert sum(p for *_, p in INDUSTRY_SEARCHES) <= 7
 
 
 def _adzuna_name(what, where):
     return f"Adzuna SA: {what}" + (f" ({where})" if where else " (all SA)")
 
 
-for searches, hours in ((ROLE_SEARCHES, ROLE_REFRESH_HOURS), (INDUSTRY_SEARCHES, DAILY_REFRESH_HOURS)):
+def add_adzuna_searches(searches, hours):
     for what, where, pages in searches:
         SOURCES[_adzuna_name(what, where)] = {**A, "what": what, "pages": pages, "refresh_hours": hours,
                                                **({"where": where} if where else {})}
+
+
+add_adzuna_searches(INDUSTRY_SEARCHES, DAILY_REFRESH_HOURS)
+
+
+async def add_profile_role_searches(db):
+    """One search per role people want (most wanted first, within budget)."""
+    from app.modules.job_discovery.search_plan import PAGE_BUDGET, plan_role_searches
+    roles = list((await db.execute(text(
+        "SELECT unnest(desired_roles) FROM profiles WHERE desired_roles IS NOT NULL"))).scalars())
+    plan = plan_role_searches(roles)
+    assert sum(p for *_, p in plan) <= PAGE_BUDGET
+    add_adzuna_searches(plan, ROLE_REFRESH_HOURS)
+    print("ROLE_SEARCHES", ", ".join(f"{w} x{p}" for w, _, p in plan), flush=True)
 
 
 def category_pages(tags):
@@ -194,6 +194,7 @@ async def main():
     have_adzuna = bool(settings.ADZUNA_APP_ID and settings.ADZUNA_APP_KEY)
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
+        await add_profile_role_searches(db)
         existing = {s.name: s for s in (await db.execute(select(JobSource))).scalars()}
         for name, cfg in SOURCES.items():
             if name in existing:
