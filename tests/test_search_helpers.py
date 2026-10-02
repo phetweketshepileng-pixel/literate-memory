@@ -106,3 +106,14 @@ def test_areas_from_ads_come_after_known_places():
     out = location_suggestions("cape", ROWS)
     kinds = [s.kind for s in out]
     assert kinds.index("Area") > kinds.index("Province")
+
+
+def test_unnamed_employer_reposts_are_merged_by_description():
+    desc = "Our client, a leading financial services group, seeks an implementations business analyst to join the team"
+    items = [NS(title="Implementations Business Analyst - Roodepoort", company=None, location=l, description=desc)
+             for l in ("Kensington, East Johannesburg", "Kensington, East Johannesburg", "Johannesburg, Gauteng")]
+    items.append(NS(title="Implementations Business Analyst - Roodepoort", company=None, location="Pretoria",
+                    description="A completely different advert for another client in the insurance space, hybrid"))
+    groups = collapse_duplicates(items, key=lambda r: group_key(r.title, r.company, r.description), location=lambda r: r.location)
+    assert len(groups) == 2
+    assert groups[0].other_locations == ["Johannesburg, Gauteng"]
