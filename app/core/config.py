@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ADZUNA_APP_ID: str = ""
     ADZUNA_APP_KEY: str = ""
+    # Secret code for the sign-in page's "Forgot password?" form. Set it as a
+    # Railway variable (12+ characters); the form is disabled while empty.
+    PASSWORD_RESET_CODE: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod
