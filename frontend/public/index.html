@@ -363,6 +363,111 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .suggest-list .s-empty { cursor: default; color: var(--text-mid); }
 .also-in { font-size: 12px; color: var(--text-mid); margin-top: 4px; }
 @media (max-width: 560px) { .sf-go { width: 100%; } .sf-filters { flex-direction: column; align-items: stretch; } .sf-mini { justify-content: space-between; } }
+
+/* ================= Polish pass: tighter, more consistent ================= */
+body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+:root { --radius-m: 10px; --shadow-1: 0 1px 2px rgba(16,37,26,.05); --focus: 0 0 0 3px rgba(47,143,93,.28); }
+
+/* use the screen: centred, wider column; the top bar lines up with it */
+.content { max-width: 1240px; margin: 0 auto; padding: 24px 32px 64px; }
+.topbar { padding-left: max(32px, calc((100% - 1240px) / 2 + 32px)); padding-right: max(32px, calc((100% - 1240px) / 2 + 32px)); }
+.topbar h1 { font-size: 24px; }
+
+/* sidebar */
+.brand { padding-bottom: 24px; }
+.nav-group { margin-bottom: 14px; }
+.nav-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; margin: 6px 0 4px; }
+.nav-item { padding: 8px 20px 8px 21px; font-size: 14px; gap: 11px; border-radius: 0 8px 8px 0; margin-right: 12px; width: calc(100% - 12px); }
+.nav-icon { width: 17px; height: 17px; opacity: .9; }
+.nav-item.active .nav-icon { color: var(--leaf); opacity: 1; }
+
+/* panels + headings: clearer hierarchy */
+.panel { padding: 18px 20px; box-shadow: var(--shadow-1); }
+.section-title { font-size: 14.5px; font-weight: 600; color: var(--text-dark); margin: 0 0 12px; letter-spacing: -.005em; }
+.section-title .muted { font-weight: 400; font-size: 13px; }
+.panel-head { margin-bottom: 8px; }
+
+/* one number style everywhere (no serif digits) */
+.stat-num, .match-score, .domain-score, .kpi-value, .rec-score .n {
+  font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.stat-num { font-size: 28px; }
+.kpi-value { font-size: 28px; }
+
+/* buttons + inputs: same heights, visible focus */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 16px; border-radius: 6px;
+  transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
+.btn-sm { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
+.btn-moss { background: var(--moss-deep); color: #fff; }  /* white on deep moss: 6:1 contrast */
+.btn-moss:hover { background: #1A5536; }
+:root[data-theme="dark"] .btn-ghost { color: var(--text-dark); }
+input[type=text], input[type=number], input[type=email], input[type=password], input[type=date], select, textarea {
+  border-radius: 6px; min-height: 38px; transition: border-color .15s, box-shadow .15s; }
+input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav-item:focus-visible { outline: none; border-color: var(--moss); box-shadow: var(--focus); }
+label.field-label { margin: 12px 0 5px; }
+
+/* job cards: one compact row — details left, score + action right */
+.job-card { border: 1px solid var(--paper-line); border-left: 3px solid var(--paper-line); border-radius: 8px; padding: 12px 16px;
+  margin-bottom: 8px; align-items: center; flex-wrap: nowrap; box-shadow: var(--shadow-1); transition: border-color .15s; }
+.job-card:hover { border-color: var(--text-mid); }
+.job-card.gem { border-left-color: var(--moss); }
+.job-card > div:first-child { min-width: 0; flex: 1; }
+.job-title { font-size: 15px; }
+.job-side { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.job-side .match-score { font-size: 18px; }
+.ind-tag { margin-left: 8px; }
+@media (max-width: 640px) { .job-card { flex-wrap: wrap; } .job-side { width: 100%; justify-content: space-between; } }
+
+/* dashboard "top matches": shorter rows */
+.rec { padding: 12px 0; gap: 14px; align-items: center; }
+.rec-title { font-size: 15px; }
+.rec-meta { margin-top: 1px; }
+.rec-why { gap: 2px 14px; margin-top: 5px; font-size: 12.5px; }
+.rec-why span { background: none; border: 0; padding: 0; color: var(--text-mid); }
+.rec-why span::before { content: "✓"; color: var(--moss); font-weight: 600; margin-right: 5px; }
+.rec-actions { flex-direction: row; gap: 6px; }
+@media (max-width: 560px) { .rec-actions { padding-left: 0; } }
+.also-in { margin-top: 3px; }
+.via { font-size: 12px; }
+
+/* KPI tiles */
+.kpi-label { font-size: 13px; font-weight: 500; color: var(--text-mid); }
+.kpi-row { gap: 16px; margin-bottom: 16px; }
+.dash-main, .dash-charts { gap: 16px; }
+.dash-main { margin-bottom: 16px; }
+
+/* chips, kanban, misc */
+.competency-chip { border-radius: 999px; padding: 3px 10px; }
+.kanban { gap: 12px; }
+.kanban-col { min-width: 210px; }
+.kanban-col-head { font-weight: 600; color: var(--text-dark); font-size: 13px; }
+.kanban-col-head span:last-child { color: var(--text-mid); font-weight: 500; }
+.kanban-card { border-radius: 8px; padding: 12px; box-shadow: var(--shadow-1); }
+.kanban-card .job-link { background: none; border: 0; padding: 0; text-align: left; color: var(--text-mid); font-size: 13px; }
+.kanban-card .job-link:hover { color: var(--text-dark); text-decoration: underline; }
+.hidden-gem-strip { border-radius: var(--radius-m); }
+#toast { border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.modal { border-radius: 12px; }
+.empty { border-radius: var(--radius-m); }
+
+@media (max-width: 520px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { padding: 14px; }
+  .kpi-value { font-size: 24px; }
+  .kpi-sub { font-size: 11.5px; }
+  .content { padding: 16px 14px 56px; }
+  .job-card { padding: 12px 14px; }
+}
+label.btn { cursor: pointer; }
+/* dark mode: text on the dark "ink" surfaces must stay light */
+.btn-primary, #toast, .auth-tabs button.active { color: #fff; }
+:root[data-theme="dark"] .btn-primary { background: var(--moss-deep); }
+:root[data-theme="dark"] .btn-primary:hover { background: #1A5536; }
+:root[data-theme="dark"] .pill-moss { background: rgba(111,190,140,.16); color: var(--leaf); filter: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn-primary { background: var(--moss-deep); }
+  :root:not([data-theme="light"]) .btn-primary:hover { background: #1A5536; }
+  :root:not([data-theme="light"]) .pill-moss { background: rgba(111,190,140,.16); color: var(--leaf); }
+}
 </style></head><body>
 <div id="toast"></div>
 <div id="applyPrompt" class="apply-prompt" role="dialog" aria-live="polite" hidden>
@@ -424,21 +529,21 @@ select, input[type=number], input[type=email], input[type=password], input[type=
       <div class="brand-sub">AI Career Operating System</div>
     </div>
     <nav class="nav-group">
-      <button class="nav-item active" data-screen="dashboard">◆ Dashboard</button>
-      <button class="nav-item" data-screen="profile">◆ My Profile</button>
-      <button class="nav-item" data-screen="jobs">◆ Job Search</button>
-      <button class="nav-item" data-screen="applications">◆ Applications</button>
-      <button class="nav-item" data-screen="analytics">◆ Analytics</button>
+      <button class="nav-item active" data-screen="dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
+      <button class="nav-item" data-screen="profile"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>My Profile</button>
+      <button class="nav-item" data-screen="jobs"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Job Search</button>
+      <button class="nav-item" data-screen="applications"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Applications</button>
+      <button class="nav-item" data-screen="analytics"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analytics</button>
     </nav>
     <div class="nav-group">
       <div class="nav-label">Career Growth</div>
-      <button class="nav-item" data-screen="transition">◆ Career Transition</button>
-      <button class="nav-item" data-screen="interview">◆ Interview Prep</button>
-      <button class="nav-item" data-screen="branding">◆ Professional Brand</button>
-      <button class="nav-item" data-screen="intelligence">◆ Recruiter Intelligence</button>
+      <button class="nav-item" data-screen="transition"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17 10 11l4 4 6-7"/><path d="M15 8h5v5"/></svg>Career Transition</button>
+      <button class="nav-item" data-screen="interview"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>Interview Prep</button>
+      <button class="nav-item" data-screen="branding"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9Z"/></svg>Professional Brand</button>
+      <button class="nav-item" data-screen="intelligence"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>Recruiter Intelligence</button>
     </div>
     <div class="nav-group">
-      <button class="nav-item" data-screen="settings">◆ Settings</button>
+      <button class="nav-item" data-screen="settings"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Settings</button>
     </div>
     <div class="sidebar-foot">
       <button class="profile-chip" id="identityChip" style="background:none; border:none; width:100%; text-align:left; padding:0;">
@@ -552,7 +657,7 @@ select, input[type=number], input[type=email], input[type=password], input[type=
             <div class="panel" style="margin-bottom:18px;">
               <div class="section-title">Master CV</div>
               <p class="small muted" style="margin-top:0;">Upload your CV as a PDF, Word (.docx) or .txt file. We read it, add the skills we find, and use it when tailoring CVs. Uploading again replaces it.</p>
-              <label class="btn btn-primary btn-sm" style="display:inline-block;">Choose file
+              <label class="btn btn-primary btn-sm">Choose file
                 <input type="file" id="cvFileInput" accept=".pdf,.docx,.txt" style="display:none;">
               </label>
               <div id="cvCurrent" class="small" style="margin-top:10px;"></div>
@@ -1010,6 +1115,7 @@ select, input[type=number], input[type=email], input[type=password], input[type=
     return '<div class="also-in">Also advertised in ' + a.slice(0, 3).map(esc).join('; ') + (a.length > 3 ? ' and ' + (a.length - 3) + ' more' : '') + '</div>';
   }
   function viaLine(j) { return j && j.via === 'adzuna' ? '<div class="via">' + ADZUNA_LINK + '</div>' : ''; }
+  function viaInline(j) { return j && j.via === 'adzuna' ? ' · <span class="via">' + ADZUNA_LINK + '</span>' : ''; }
 
   // Shared tooltip for every chart: positioned near the pointer or the focused bar.
   var tip = $('chartTip');
@@ -1089,8 +1195,8 @@ select, input[type=number], input[type=email], input[type=password], input[type=
   function recCard(j) {
     var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.industry && j.industry !== 'Other' ? j.industry : ''].filter(Boolean).map(esc).join(' · ');
     return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
-      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + '</div>' +
-      alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + viaLine(j) + '</div>' +
+      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + viaInline(j) + '</div>' +
+      alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
       '<div class="rec-actions"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View</button><button class="btn btn-moss btn-sm" data-save-job="' + esc(j.id) + '">Save</button></div></div>';
   }
   $('dashRecommended').addEventListener('click', function (e) {
@@ -1309,8 +1415,8 @@ select, input[type=number], input[type=email], input[type=password], input[type=
     var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
-      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + '</div>' +
-      alsoIn(j) + viaLine(j) + '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>' + score + '</div>';
+      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
+      alsoIn(j) + '</div><div class="job-side">' + score + '<button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>';
   }
   function searchParams() {
     var f = $('jobSearchForm'), q = [];
