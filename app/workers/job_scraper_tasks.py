@@ -16,7 +16,9 @@ from app.modules.job_discovery.adapters.adzuna_adapter import AdzunaAdapter
 from app.modules.job_discovery.adapters.api_feed_adapter import ApiFeedAdapter
 from app.modules.job_discovery.adapters.career_page_adapter import AtsCareerPageAdapter
 from app.modules.job_discovery.adapters.rss_feed_adapter import RssFeedAdapter
+from app.modules.job_discovery.adapters.ats_board_adapter import AtsBoardAdapter
 from app.modules.job_discovery.deduplication import find_duplicate, record_additional_source
+from app.modules.job_discovery.industry import classify_industry, industry_from_payload
 from app.core.rate_limit import TokenBucketLimiter
 from app.models import Job, JobSource
 
@@ -27,6 +29,7 @@ ADAPTER_REGISTRY = {
     "rss_feed": RssFeedAdapter,
     "career_page": AtsCareerPageAdapter,
     "adzuna": AdzunaAdapter,
+    "ats_board": AtsBoardAdapter,  # employer careers boards (Greenhouse, Lever, SmartRecruiters, Workable)
     # "search_discovery" intentionally omitted — its results route to a
     # separate onboarding queue, not this ingestion path (see
     # SearchEngineDiscoveryAdapter docstring).
@@ -80,6 +83,11 @@ async def _poll_source_async(source_id: str) -> dict:
             if not normalized.title:
                 continue  # unusable listing, skip rather than insert garbage
 
+            industry = classify_industry(
+                normalized.title, normalized.company,
+                industry_from_payload(normalized.raw_payload), normalized.industry,
+            )
+
             # A listing this source already gave us is an update, not a
             # cross-source duplicate — check that first, otherwise every
             # re-poll would count the job as "seen elsewhere" and wrongly
@@ -109,6 +117,7 @@ async def _poll_source_async(source_id: str) -> dict:
                 existing.description = normalized.description
                 existing.apply_url = normalized.apply_url
                 existing.raw_payload = normalized.raw_payload
+                existing.industry = industry
                 updated_count += 1
             else:
                 db.add(
@@ -129,11 +138,24 @@ async def _poll_source_async(source_id: str) -> dict:
                         # confirmed/revised by record_additional_source if a
                         # duplicate later turns up on another source
                         raw_payload=normalized.raw_payload,
+                        industry=industry,
                     )
                 )
                 new_count += 1
 
         from datetime import datetime, UTC
+
+        closed_count = 0
+        if getattr(adapter, "closes_missing_listings", False):
+            # employer boards list every open role: anything of theirs we
+            # hold that's no longer listed has been filled or withdrawn
+            seen = {r.external_id for r in raw_listings}
+            for job in (
+                await db.execute(select(Job).where(Job.source_id == source.id, Job.is_active.is_(True)))
+            ).scalars():
+                if job.external_id not in seen:
+                    job.is_active, job.closed_at = False, datetime.now(UTC)
+                    closed_count += 1
 
         source.last_polled_at = datetime.now(UTC)
         await db.commit()
@@ -144,6 +166,7 @@ async def _poll_source_async(source_id: str) -> dict:
             "new": new_count,
             "updated": updated_count,
             "duplicates_merged": duplicate_count,
+            "closed": closed_count,
         }
         logger.info("Ingestion complete for %s: %s", source.name, result)
         return result
