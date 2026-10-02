@@ -656,13 +656,14 @@
           '<button class="btn btn-ghost btn-sm" id="scoreBtn">Score my match</button>' +
           '<select id="cvVariant" style="width:auto;"><option value="ats">ATS-optimised</option><option value="recruiter_friendly">Recruiter-friendly</option></select>' +
           '<button class="btn btn-ghost btn-sm" id="tailorBtn">Tailor my CV</button>' +
-          (j.apply_url ? '<a class="btn btn-ghost btn-sm" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">Apply on site ↗</a>' : '') +
+          (j.apply_url ? '<a class="btn btn-ghost btn-sm" id="applyOnSite" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">Apply on site ↗</a>' : '') +
         '</div><div id="aiStatus" class="small" style="margin-top:12px;"></div>';
       showMatch(id);
       $('saveJobBtn').onclick = function () {
         this.disabled = true;
         api('POST', '/applications', { job_id: id }).then(function () { toast('Saved to your pipeline'); }).catch(function (e) { $('saveJobBtn').disabled = false; fail(e); });
       };
+      if ($('applyOnSite')) $('applyOnSite').addEventListener('click', function () { rememberApplyClick(j); });
       $('scoreBtn').onclick = function () { runScore(id); };
       $('tailorBtn').onclick = function () { runTailor(id, $('cvVariant').value); };
     }).catch(function (e) { $('jobModalBody').innerHTML = empty(esc(e.message)); });
@@ -715,6 +716,52 @@
     if (to === 'offer' && (ORDER[from] == null ? -1 : ORDER[from]) < ORDER.interview) return false;
     return true;
   }
+  // ---- "Did you apply?" ----
+  // Ascend can't see what happens on the employer's site, so when someone
+  // clicks "Apply on site" we remember it and ask once they come back.
+  var PENDING_KEY = 'ascend_pending_apply';
+  function rememberApplyClick(j) {
+    storeJSON(ukey(PENDING_KEY), { id: j.id, title: j.title, company: j.company || '', at: Date.now() });
+  }
+  function maybeAskApplied() {
+    var p = storeJSON(ukey(PENDING_KEY));
+    if (!p || !session || $('appView').style.display === 'none') return;
+    if (Date.now() - p.at < 4000) return;                       // still on the way out
+    if (Date.now() - p.at > 3 * 24 * 3600 * 1000) { storeJSON(ukey(PENDING_KEY), null); return; }
+    $('applyPromptJob').textContent = p.title + (p.company ? ' at ' + p.company : '');
+    $('applyPrompt').hidden = false;
+  }
+  function closeApplyPrompt() { $('applyPrompt').hidden = true; storeJSON(ukey(PENDING_KEY), null); }
+  function markApplied(jobId) {
+    // track it if it isn't yet, then move it to Submitted
+    return api('POST', '/applications', { job_id: jobId }).then(unwrap, function (e) {
+      if (e.status !== 409) throw e;
+      return get('/applications').then(function (apps) { return apps.filter(function (a) { return a.job_id === jobId; })[0]; });
+    }).then(function (app) {
+      if (!app) throw new Error('Could not find this job in your pipeline.');
+      if (app.stage !== 'saved' && app.stage !== 'applying') return app;   // already further along
+      return api('PUT', '/applications/' + app.id + '/stage', { stage: 'submitted' });
+    });
+  }
+  $('applyYes').onclick = function () {
+    var p = storeJSON(ukey(PENDING_KEY)); var btn = this; if (!p) { closeApplyPrompt(); return; }
+    btn.disabled = true;
+    markApplied(p.id).then(function () {
+      toast('Marked as applied — it\'s in Submitted now'); closeApplyPrompt();
+      var cur = store('ascend_screen'); if (cur === 'applications' || cur === 'dashboard') loaders[cur]();
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  };
+  $('applyNo').onclick = closeApplyPrompt;
+  window.addEventListener('focus', function () { setTimeout(maybeAskApplied, 300); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(maybeAskApplied, 300); });
+  $('kanban').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-mark-applied]'); if (!b) return;
+    b.disabled = true;
+    api('PUT', '/applications/' + b.getAttribute('data-mark-applied') + '/stage', { stage: 'submitted' })
+      .then(function () { toast('Marked as applied — moved to Submitted'); loaders.applications(); })
+      .catch(function (err) { b.disabled = false; fail(err); });
+  });
+
   loaders.applications = function () {
     $('kanban').innerHTML = '<span class="spinner"></span>';
     get('/applications').then(function (apps) {
@@ -727,7 +774,8 @@
             items.map(function (a) {
               var opts = '<option selected>' + label(a.stage) + '</option>' + STAGES.filter(function (s) { return validMove(a.stage, s); }).map(function (s) { return '<option value="' + s + '">→ ' + label(s) + '</option>'; }).join('');
               return '<div class="kanban-card"><div class="co">' + esc(a.job.company || '—') + '</div><button class="job-link" data-job="' + esc(a.job_id) + '">' + esc(a.job.title) + '</button>' +
-                (TERMINAL[a.stage] ? '<div class="small muted" style="margin-top:8px;">Final stage</div>' : '<select data-app="' + esc(a.id) + '">' + opts + '</select>') + '</div>';
+                (TERMINAL[a.stage] ? '<div class="small muted" style="margin-top:8px;">Final stage</div>' : '<select data-app="' + esc(a.id) + '">' + opts + '</select>') +
+                (a.stage === 'saved' || a.stage === 'applying' ? '<button class="btn btn-moss btn-sm mark-applied" data-mark-applied="' + esc(a.id) + '">✓ Mark as applied</button>' : '') + '</div>';
             }).join('') + '</div>';
         }).join('');
       });

@@ -12,6 +12,12 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .empty b { color: var(--text-dark); }
 .note { font-size: 12.5px; color: var(--text-mid); background: var(--paper); border-left: 3px solid var(--leaf); padding: 9px 12px; border-radius: 0 4px 4px 0; margin: 10px 0; }
 .note.warn { border-left-color: var(--brick); }
+.apply-prompt { position: fixed; right: 20px; bottom: 20px; z-index: 70; width: 320px; max-width: calc(100vw - 32px); background: var(--paper-2);
+  border: 1px solid var(--paper-line); border-left: 4px solid var(--moss); border-radius: 8px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.apply-prompt .ap-q { font-weight: 600; font-size: 15px; color: var(--text-dark); }
+.apply-prompt .ap-job { font-size: 13px; color: var(--text-mid); margin: 4px 0 12px; }
+.apply-prompt .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kanban-card .mark-applied { margin-top: 8px; width: 100%; }
 .link-btn { background: none; border: none; padding: 0; margin-top: 14px; color: var(--text-mid); text-decoration: underline; font-size: 13px; cursor: pointer; display: block; }
 .chip-x { border: none; background: none; color: var(--text-mid); padding: 0 0 0 6px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: default; }
