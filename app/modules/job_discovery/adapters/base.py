@@ -36,6 +36,9 @@ class NormalizedJob:
     date_posted: date | None
     is_syndicated: bool
     raw_payload: dict[str, Any] = field(default_factory=dict)
+    # set by adapters that know it (an employer board configured as
+    # "Banking"); otherwise worked out by industry.classify_industry
+    industry: str | None = None
 
 
 @dataclass
