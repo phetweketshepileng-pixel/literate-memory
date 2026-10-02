@@ -2,14 +2,17 @@
 for revocable, rotatable sessions per the V1.1 security review."""
 from __future__ import annotations
 
+import hmac
+import time
 from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import Profile, RefreshToken, User
 from app.modules.auth.service import (
@@ -36,6 +39,12 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_code: str
+    new_password: str
 
 
 class TokenResponse(BaseModel):
@@ -131,3 +140,48 @@ async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) ->
     if existing is not None and existing.revoked_at is None:
         existing.revoked_at = datetime.now(UTC)
         await db.commit()
+
+
+# Wrong reset codes are rate limited: after MAX_RESET_FAILURES within the
+# window, every attempt is refused until the window passes (stops guessing).
+MAX_RESET_FAILURES = 5
+RESET_WINDOW_SECONDS = 15 * 60
+MIN_RESET_CODE_LENGTH = 12
+_reset_failures: list[float] = []
+
+
+def _reset_locked(now: float) -> bool:
+    _reset_failures[:] = [t for t in _reset_failures if now - t < RESET_WINDOW_SECONDS]
+    return len(_reset_failures) >= MAX_RESET_FAILURES
+
+
+@router.post("/reset-password", status_code=204)
+async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)) -> None:
+    """Self-service reset for a forgotten password, authorised by the
+    PASSWORD_RESET_CODE secret that only the site owner knows (no email
+    service is configured yet). Signs the account out everywhere."""
+    expected = settings.PASSWORD_RESET_CODE.strip()
+    if len(expected) < MIN_RESET_CODE_LENGTH:
+        raise HTTPException(status_code=503, detail={"code": "NOT_CONFIGURED",
+            "message": "Password reset isn't set up yet: add a PASSWORD_RESET_CODE variable (12+ characters) to the backend in Railway."})
+    now = time.monotonic()
+    if _reset_locked(now):
+        raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED",
+            "message": "Too many wrong reset codes. Wait 15 minutes and try again."})
+    if not hmac.compare_digest(payload.reset_code.strip().encode(), expected.encode()):
+        _reset_failures.append(now)
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "That reset code is not right."})
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR", "message": "The new password needs at least 8 characters."})
+    user = (await db.execute(select(User).where(User.email == payload.email.lower()))).scalar_one_or_none()
+    if user is None:
+        user = (await db.execute(select(User).where(User.email.ilike(payload.email)))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail={"code": "RESOURCE_NOT_FOUND", "message": "No account uses that email."})
+    user.password_hash = hash_password(payload.new_password)
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+    await db.commit()
