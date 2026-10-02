@@ -231,6 +231,12 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .empty b { color: var(--text-dark); }
 .note { font-size: 12.5px; color: var(--text-mid); background: var(--paper); border-left: 3px solid var(--leaf); padding: 9px 12px; border-radius: 0 4px 4px 0; margin: 10px 0; }
 .note.warn { border-left-color: var(--brick); }
+.apply-prompt { position: fixed; right: 20px; bottom: 20px; z-index: 70; width: 320px; max-width: calc(100vw - 32px); background: var(--paper-2);
+  border: 1px solid var(--paper-line); border-left: 4px solid var(--moss); border-radius: 8px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.apply-prompt .ap-q { font-weight: 600; font-size: 15px; color: var(--text-dark); }
+.apply-prompt .ap-job { font-size: 13px; color: var(--text-mid); margin: 4px 0 12px; }
+.apply-prompt .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kanban-card .mark-applied { margin-top: 8px; width: 100%; }
 .link-btn { background: none; border: none; padding: 0; margin-top: 14px; color: var(--text-mid); text-decoration: underline; font-size: 13px; cursor: pointer; display: block; }
 .chip-x { border: none; background: none; color: var(--text-mid); padding: 0 0 0 6px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: default; }
@@ -359,6 +365,14 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 @media (max-width: 560px) { .sf-go { width: 100%; } .sf-filters { flex-direction: column; align-items: stretch; } .sf-mini { justify-content: space-between; } }
 </style></head><body>
 <div id="toast"></div>
+<div id="applyPrompt" class="apply-prompt" role="dialog" aria-live="polite" hidden>
+  <div class="ap-q">Did you apply?</div>
+  <div class="ap-job" id="applyPromptJob"></div>
+  <div class="ap-actions">
+    <button type="button" class="btn btn-primary btn-sm" id="applyYes">Yes, mark as applied</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="applyNo">Not yet</button>
+  </div>
+</div>
 
 <!-- ================= AUTH ================= -->
 <div class="auth-wrap" id="authView" style="display:none;">
@@ -1408,13 +1422,14 @@ select, input[type=number], input[type=email], input[type=password], input[type=
           '<button class="btn btn-ghost btn-sm" id="scoreBtn">Score my match</button>' +
           '<select id="cvVariant" style="width:auto;"><option value="ats">ATS-optimised</option><option value="recruiter_friendly">Recruiter-friendly</option></select>' +
           '<button class="btn btn-ghost btn-sm" id="tailorBtn">Tailor my CV</button>' +
-          (j.apply_url ? '<a class="btn btn-ghost btn-sm" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">Apply on site ↗</a>' : '') +
+          (j.apply_url ? '<a class="btn btn-ghost btn-sm" id="applyOnSite" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">Apply on site ↗</a>' : '') +
         '</div><div id="aiStatus" class="small" style="margin-top:12px;"></div>';
       showMatch(id);
       $('saveJobBtn').onclick = function () {
         this.disabled = true;
         api('POST', '/applications', { job_id: id }).then(function () { toast('Saved to your pipeline'); }).catch(function (e) { $('saveJobBtn').disabled = false; fail(e); });
       };
+      if ($('applyOnSite')) $('applyOnSite').addEventListener('click', function () { rememberApplyClick(j); });
       $('scoreBtn').onclick = function () { runScore(id); };
       $('tailorBtn').onclick = function () { runTailor(id, $('cvVariant').value); };
     }).catch(function (e) { $('jobModalBody').innerHTML = empty(esc(e.message)); });
@@ -1467,6 +1482,52 @@ select, input[type=number], input[type=email], input[type=password], input[type=
     if (to === 'offer' && (ORDER[from] == null ? -1 : ORDER[from]) < ORDER.interview) return false;
     return true;
   }
+  // ---- "Did you apply?" ----
+  // Ascend can't see what happens on the employer's site, so when someone
+  // clicks "Apply on site" we remember it and ask once they come back.
+  var PENDING_KEY = 'ascend_pending_apply';
+  function rememberApplyClick(j) {
+    storeJSON(ukey(PENDING_KEY), { id: j.id, title: j.title, company: j.company || '', at: Date.now() });
+  }
+  function maybeAskApplied() {
+    var p = storeJSON(ukey(PENDING_KEY));
+    if (!p || !session || $('appView').style.display === 'none') return;
+    if (Date.now() - p.at < 4000) return;                       // still on the way out
+    if (Date.now() - p.at > 3 * 24 * 3600 * 1000) { storeJSON(ukey(PENDING_KEY), null); return; }
+    $('applyPromptJob').textContent = p.title + (p.company ? ' at ' + p.company : '');
+    $('applyPrompt').hidden = false;
+  }
+  function closeApplyPrompt() { $('applyPrompt').hidden = true; storeJSON(ukey(PENDING_KEY), null); }
+  function markApplied(jobId) {
+    // track it if it isn't yet, then move it to Submitted
+    return api('POST', '/applications', { job_id: jobId }).then(unwrap, function (e) {
+      if (e.status !== 409) throw e;
+      return get('/applications').then(function (apps) { return apps.filter(function (a) { return a.job_id === jobId; })[0]; });
+    }).then(function (app) {
+      if (!app) throw new Error('Could not find this job in your pipeline.');
+      if (app.stage !== 'saved' && app.stage !== 'applying') return app;   // already further along
+      return api('PUT', '/applications/' + app.id + '/stage', { stage: 'submitted' });
+    });
+  }
+  $('applyYes').onclick = function () {
+    var p = storeJSON(ukey(PENDING_KEY)); var btn = this; if (!p) { closeApplyPrompt(); return; }
+    btn.disabled = true;
+    markApplied(p.id).then(function () {
+      toast('Marked as applied — it\'s in Submitted now'); closeApplyPrompt();
+      var cur = store('ascend_screen'); if (cur === 'applications' || cur === 'dashboard') loaders[cur]();
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  };
+  $('applyNo').onclick = closeApplyPrompt;
+  window.addEventListener('focus', function () { setTimeout(maybeAskApplied, 300); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(maybeAskApplied, 300); });
+  $('kanban').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-mark-applied]'); if (!b) return;
+    b.disabled = true;
+    api('PUT', '/applications/' + b.getAttribute('data-mark-applied') + '/stage', { stage: 'submitted' })
+      .then(function () { toast('Marked as applied — moved to Submitted'); loaders.applications(); })
+      .catch(function (err) { b.disabled = false; fail(err); });
+  });
+
   loaders.applications = function () {
     $('kanban').innerHTML = '<span class="spinner"></span>';
     get('/applications').then(function (apps) {
@@ -1479,7 +1540,8 @@ select, input[type=number], input[type=email], input[type=password], input[type=
             items.map(function (a) {
               var opts = '<option selected>' + label(a.stage) + '</option>' + STAGES.filter(function (s) { return validMove(a.stage, s); }).map(function (s) { return '<option value="' + s + '">→ ' + label(s) + '</option>'; }).join('');
               return '<div class="kanban-card"><div class="co">' + esc(a.job.company || '—') + '</div><button class="job-link" data-job="' + esc(a.job_id) + '">' + esc(a.job.title) + '</button>' +
-                (TERMINAL[a.stage] ? '<div class="small muted" style="margin-top:8px;">Final stage</div>' : '<select data-app="' + esc(a.id) + '">' + opts + '</select>') + '</div>';
+                (TERMINAL[a.stage] ? '<div class="small muted" style="margin-top:8px;">Final stage</div>' : '<select data-app="' + esc(a.id) + '">' + opts + '</select>') +
+                (a.stage === 'saved' || a.stage === 'applying' ? '<button class="btn btn-moss btn-sm mark-applied" data-mark-applied="' + esc(a.id) + '">✓ Mark as applied</button>' : '') + '</div>';
             }).join('') + '</div>';
         }).join('');
       });
