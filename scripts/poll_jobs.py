@@ -21,41 +21,94 @@ SOURCES = {
     "Himalayas": {**R, "feed_url": "https://himalayas.app/jobs/rss"},
 }
 
-# South African roles via the Adzuna API (needs ADZUNA_APP_ID / ADZUNA_APP_KEY).
-# Targets the platform's core transition paths: collections/banking into
-# business/systems/process/operations analysis, data, and IT/ops management.
-#
-# Adzuna's free tier allows 250 requests/day, 1,000/week and 2,500/month.
-# These searches cost at most ADZUNA_PAGE_BUDGET requests per refresh (a
-# search stops early when a page comes back short), and Adzuna sources are
-# refreshed at most every ADZUNA_REFRESH_HOURS, i.e. ~2 refreshes/day
-# -> <= ~50 requests/day, ~1,500/month.
-ADZUNA_REFRESH_HOURS = 11.5
+# ----------------------------------------------------------------- Adzuna
+# South African job boards via the Adzuna API (needs ADZUNA_APP_ID/_KEY).
+# Free tier: 250 requests/day, 1,000/week, 2,500/month (~80/day). Budget:
+#   role searches      <= 18 pages, twice a day   -> 36/day
+#   industry searches  <=  7 pages, once a day    ->  7/day
+#   every category     <= 33 pages + 1 lookup, daily -> 34/day
+#   total              <= ~77/day, ~2,300/month (searches stop early on a short page)
 A = {"adapter_type": "adzuna", "country": "za", "max_days_old": 30}
-ADZUNA_SEARCHES = [  # (keywords, location or None for all of SA, max pages of 50)
-    ("business analyst", "Gauteng", 4),
-    ("business analyst", "Western Cape", 2),
-    ("business analyst", "KwaZulu-Natal", 1),
-    ("business analyst remote", None, 1),
-    ("junior business analyst", None, 1),
-    ("systems analyst", "Gauteng", 2),
-    ("process improvement", "Gauteng", 2),
-    ("process analyst", "Gauteng", 1),
+ROLE_SEARCHES = [  # (keywords, location or None for all of SA, max pages of 50) — refreshed twice a day
+    ("business analyst", "Gauteng", 3),
+    ("business analyst", "Western Cape", 1),
+    ("business analyst", None, 1),
+    ("systems analyst", "Gauteng", 1),
+    ("process analyst", None, 1),
+    ("process improvement", "Gauteng", 1),
     ("operations analyst", "Gauteng", 1),
     ("data analyst", "Gauteng", 2),
-    ("business intelligence analyst", "Gauteng", 1),
-    ("credit risk analyst", "Gauteng", 1),
-    ("IT manager", "Gauteng", 2),
+    ("business intelligence", "Gauteng", 1),
+    ("credit risk", "Gauteng", 1),
+    ("IT manager", "Gauteng", 1),
     ("operations manager", "Gauteng", 2),
     ("project coordinator", "Gauteng", 1),
-    ("collections manager", "Gauteng", 1),
+    ("collections manager", None, 1),
 ]
-ADZUNA_PAGE_BUDGET = sum(p for _, _, p in ADZUNA_SEARCHES)
-assert ADZUNA_PAGE_BUDGET <= 30, "keep each refresh well inside Adzuna's free quota"
-for what, where, pages in ADZUNA_SEARCHES:
-    SOURCES[f"Adzuna SA: {what}" + (f" ({where})" if where else " (all SA)")] = {
-        **A, "what": what, "pages": pages, **({"where": where} if where else {})
-    }
+INDUSTRY_SEARCHES = [  # industries Adzuna has no category for — refreshed daily
+    ("bank", "Gauteng", 1), ("bank", "Western Cape", 1), ("insurance", None, 1), ("telematics", None, 1),
+    ("government", None, 1), ("municipality", None, 1), ("call centre", None, 1),
+]
+ROLE_REFRESH_HOURS, DAILY_REFRESH_HOURS = 11.5, 23.5
+CATEGORY_PAGE_BUDGET = 33
+# categories that get a 2nd page (the newest 100 jobs) when the budget allows
+PRIORITY_CATEGORIES = ("accounting-finance-jobs", "it-jobs", "customer-services-jobs", "admin-jobs",
+                       "sales-jobs", "consultancy-jobs", "hr-jobs", "logistics-warehouse-jobs", "engineering-jobs")
+CATEGORY_PREFIX = "Adzuna SA category: "
+assert sum(p for *_, p in ROLE_SEARCHES) <= 18 and sum(p for *_, p in INDUSTRY_SEARCHES) <= 7
+
+
+def _adzuna_name(what, where):
+    return f"Adzuna SA: {what}" + (f" ({where})" if where else " (all SA)")
+
+
+for searches, hours in ((ROLE_SEARCHES, ROLE_REFRESH_HOURS), (INDUSTRY_SEARCHES, DAILY_REFRESH_HOURS)):
+    for what, where, pages in searches:
+        SOURCES[_adzuna_name(what, where)] = {**A, "what": what, "pages": pages, "refresh_hours": hours,
+                                               **({"where": where} if where else {})}
+
+
+def category_pages(tags):
+    """1 page per category, then 2nd pages for priority ones, within the budget."""
+    pages = {t: 1 for t in tags[:CATEGORY_PAGE_BUDGET]}
+    spare = CATEGORY_PAGE_BUDGET - len(pages)
+    for t in PRIORITY_CATEGORIES:
+        if spare <= 0:
+            break
+        if t in pages:
+            pages[t] += 1
+            spare -= 1
+    return pages
+
+
+# ------------------------------------------------- employer careers boards
+# Public job-board APIs (Greenhouse, Lever, SmartRecruiters, Workable).
+# Jobs found only here are hidden gems. Only South African roles are kept.
+BANKING, INSURANCE, FINTECH = "Banking & financial services", "Insurance", "Banking & financial services"
+EMPLOYER_BOARDS = [  # (display name, platform, board id, industry)
+    ("Standard Bank", "smartrecruiters", "StandardBankGroup", BANKING),
+    ("Experian", "smartrecruiters", "Experian", BANKING),
+    ("OUTsurance", "smartrecruiters", "OUTsurance", INSURANCE),
+    ("1Life", "smartrecruiters", "1Life", INSURANCE),
+    ("iKhokha", "smartrecruiters", "IKhokha", FINTECH),
+    ("WNS", "smartrecruiters", "WNSGlobalServices144", "Contact centre & collections"),
+    ("Sutherland", "smartrecruiters", "Sutherland", "Contact centre & collections"),
+    ("Deloitte", "smartrecruiters", "Deloitte6", "Consulting"),
+    ("BCX", "smartrecruiters", "BCX", "IT & technology"),
+    ("Continental", "smartrecruiters", "Continental", "Manufacturing"),
+    ("Takealot", "greenhouse", "takealotgroup", "Retail"),
+    ("Ozow", "greenhouse", "ozow", FINTECH),
+    ("Entersekt", "greenhouse", "entersekt", FINTECH),
+    ("Luno", "greenhouse", "luno", FINTECH),
+    ("OfferZen", "greenhouse", "offerzen", "IT & technology"),
+    ("Mama Money", "lever", "mamamoney", FINTECH),
+    ("dLocal", "lever", "dlocal", FINTECH),
+    ("Clickatell", "workable", "clickatell", "IT & technology"),
+    ("Cartrack", "workable", "cartrack", "Telematics & fleet"),
+]
+for name, platform, board, industry in EMPLOYER_BOARDS:
+    SOURCES[f"Careers: {name}"] = {"adapter_type": "ats_board", "platform": platform, "board": board,
+                                   "company": name, "industry": industry, "sa_only": True}
 
 # Sources dropped after the first live run: Remotive's business and
 # finance feeds return 404, and the ACCA feed ignores its country filter
@@ -83,37 +136,89 @@ CLEANUP = [
     "UPDATE jobs SET description = trim(regexp_replace(regexp_replace(description, '<[^>]+>', ' ', 'g'), '&nbsp;|&amp;|&#39;|&quot;', ' ', 'g')) WHERE description LIKE '%<%'",
     # WWR titles look like 'Company: Role' with no author field
     "UPDATE jobs SET company = split_part(title, ': ', 1), title = substr(title, length(split_part(title, ': ', 1)) + 3) WHERE company IS NULL AND position(': ' in title) > 1",
-    # jobs older than 45 days drop out of search
-    "UPDATE jobs SET is_active = false, closed_at = now() WHERE is_active AND date_posted < current_date - 45",
+    # board jobs older than 40 days drop out of search (keeps the wider feed
+    # lean); employer careers-page jobs stay while the employer still lists them
+    """UPDATE jobs SET is_active = false, closed_at = now() WHERE is_active AND date_posted < current_date - 40
+         AND source_id NOT IN (SELECT id FROM job_sources WHERE name LIKE 'Careers:%')""",
 ]
 
+def _due(src, now):
+    hours = (src.config or {}).get("refresh_hours")
+    return not (hours and src.last_polled_at and now - src.last_polled_at < timedelta(hours=hours))
+
+
+async def sync_categories(db, now):
+    """Once a day: read Adzuna's category list and keep one source per category."""
+    from app.modules.job_discovery.adapters.adzuna_adapter import fetch_categories
+    existing = {s.name: s for s in (await db.execute(select(JobSource).where(JobSource.name.like(CATEGORY_PREFIX + "%")))).scalars()}
+    active = [s for s in existing.values() if s.is_active]
+    if active and not any(_due(s, now) for s in active):
+        return
+    try:
+        cats = await fetch_categories("za")
+    except Exception as e:  # keep yesterday's list if the lookup fails
+        print("NOTE Adzuna category lookup failed:", str(e)[:200], flush=True)
+        return
+    tags = [c["tag"] for c in cats if c.get("tag") and c["tag"] not in ("unknown",)]
+    pages = category_pages(tags)
+    labels = {c["tag"]: c.get("label") or c["tag"] for c in cats}
+    keep = set()
+    for tag, n in pages.items():
+        name = CATEGORY_PREFIX + labels[tag]
+        keep.add(name)
+        cfg = {**A, "category": tag, "pages": n, "refresh_hours": DAILY_REFRESH_HOURS}
+        if name in existing:
+            existing[name].config, existing[name].is_active = cfg, True
+        else:
+            db.add(JobSource(name=name, config=cfg, poll_frequency_minutes=1440))
+    for name, src in existing.items():
+        if name not in keep:
+            src.is_active = False
+    print("CATEGORIES", len(pages), "categories,", sum(pages.values()), "pages", flush=True)
+
+
+async def backfill_industry(db):
+    """Give jobs saved before industries existed (or before a rule changed) one."""
+    from app.models import Job
+    from app.modules.job_discovery.industry import classify_industry, industry_from_payload
+    rows = (await db.execute(select(Job.id, Job.title, Job.company, Job.raw_payload)
+                             .where(Job.is_active, Job.industry.is_(None)).limit(20000))).all()
+    for jid, title, company, payload in rows:
+        await db.execute(text("UPDATE jobs SET industry = :i WHERE id = :id"),
+                         {"i": classify_industry(title, company, industry_from_payload(payload)), "id": jid})
+    return len(rows)
+
+
 async def main():
+    from app.core.config import settings
+    have_adzuna = bool(settings.ADZUNA_APP_ID and settings.ADZUNA_APP_KEY)
+    now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         existing = {s.name: s for s in (await db.execute(select(JobSource))).scalars()}
         for name, cfg in SOURCES.items():
             if name in existing:
                 existing[name].config = cfg
+                existing[name].is_active = True
             else:
                 db.add(JobSource(name=name, config=cfg, poll_frequency_minutes=360))
         for src in existing.values():
-            if src.name.startswith("Adzuna") and src.name not in SOURCES and src.is_active:
+            if (src.name.startswith("Adzuna") and not src.name.startswith(CATEGORY_PREFIX)
+                    and src.name not in SOURCES and src.is_active):
                 src.is_active = False  # search replaced; its jobs stay until they age out
         for src in (await db.execute(select(JobSource).where(JobSource.name.in_(RETIRED)))).scalars():
             src.is_active = False
             await db.execute(text("UPDATE jobs SET is_active = false, closed_at = now() WHERE source_id = :s AND is_active"), {"s": src.id})
+        if have_adzuna:
+            await sync_categories(db, now)
         await db.commit()
-        now = datetime.now(UTC)
-        ids = [
-            (s.name, str(s.id))
-            for s in (await db.execute(select(JobSource).where(JobSource.is_active))).scalars()
-            # Adzuna searches refresh ~twice a day to stay inside the free quota
-            if not (s.name.startswith("Adzuna") and s.last_polled_at
-                    and now - s.last_polled_at < timedelta(hours=ADZUNA_REFRESH_HOURS))
-        ]
-    from app.core.config import settings
-    if not (settings.ADZUNA_APP_ID and settings.ADZUNA_APP_KEY):
+        ids = [(s.name, str(s.id)) for s in (await db.execute(select(JobSource).where(JobSource.is_active))).scalars()
+               if _due(s, now)]
+    if not have_adzuna:
         print("NOTE Adzuna keys not set - skipping South African job searches (set ADZUNA_APP_ID and ADZUNA_APP_KEY)", flush=True)
         ids = [(n, i) for n, i in ids if not n.startswith("Adzuna")]
+    # employer boards first: a job seen there before Adzuna lists it stays a hidden gem until it shows up on a board
+    ids.sort(key=lambda t: (not t[0].startswith("Careers:"), t[0]))
+    print("POLLING", len(ids), "sources", flush=True)
     for name, sid in ids:
         try:
             print("POLL", json.dumps(await _poll_source_async(sid)), flush=True)
@@ -122,8 +227,12 @@ async def main():
     async with AsyncSessionLocal() as db:
         for q in CLEANUP:
             await db.execute(text(q))
+        filled = await backfill_industry(db)
         await db.commit()
         n = (await db.execute(text("select count(*) from jobs where is_active"))).scalar()
-    print("ACTIVE_JOBS", n, flush=True)
+        gems = (await db.execute(text("select count(*) from jobs where is_active and is_hidden_gem"))).scalar()
+    print("INDUSTRY_BACKFILLED", filled, flush=True)
+    print("ACTIVE_JOBS", n, "HIDDEN_GEMS", gems, flush=True)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
