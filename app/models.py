@@ -314,6 +314,7 @@ class Job(Base):
             postgresql_where=text("is_active = true"),
         ),
         Index("idx_jobs_industry_date", "company", "date_posted", postgresql_where=text("is_active = true")),
+        Index("idx_jobs_industry_active", "industry", postgresql_where=text("is_active = true")),
         Index(
             "idx_jobs_hidden_gem",
             "is_hidden_gem",
@@ -335,6 +336,7 @@ class Job(Base):
     date_posted: Mapped[date | None] = mapped_column(Date)
     is_syndicated: Mapped[bool] = mapped_column(server_default=text("true"))
     competition_score: Mapped[str | None] = mapped_column(String(10))
+    industry: Mapped[str | None] = mapped_column(String(80))
     is_hidden_gem: Mapped[bool] = mapped_column(server_default=text("false"))
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
