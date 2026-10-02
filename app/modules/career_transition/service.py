@@ -126,7 +126,7 @@ def rank_target_domains_by_readiness(
     years_in_source_domain: int,
 ) -> list[tuple[str, ReadinessResult]]:
     """Powers Career Coach AI's 'which role should I focus on' — ranks all
-    5 target domains for this specific user, not just the curated base
+    the target domains for this specific user, not just the curated base
     affinity, per ai-job-hunter-career-transition-engine.md section 3."""
     from app.modules.career_transition.domain_knowledge import TARGET_DOMAINS
 

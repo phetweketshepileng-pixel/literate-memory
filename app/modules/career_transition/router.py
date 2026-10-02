@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models import Certification, Profile, Skill
-from app.modules.career_transition.domain_knowledge import SOURCE_DOMAINS, TARGET_DOMAINS
+from app.modules.career_transition.domain_knowledge import DOMAIN_LABELS, SOURCE_DOMAINS, TARGET_DOMAINS
 from app.modules.career_transition.service import (
     ReadinessInputs,
     build_reframed_facts_for_cv_tailoring,
@@ -42,7 +42,7 @@ async def _load_profile_signals(db: AsyncSession, user_id: UUID) -> tuple[Profil
 @router.get("/domains")
 async def list_domains():
     return {
-        "data": {"source_domains": SOURCE_DOMAINS, "target_domains": TARGET_DOMAINS},
+        "data": {"source_domains": SOURCE_DOMAINS, "target_domains": TARGET_DOMAINS, "labels": DOMAIN_LABELS},
         "meta": {}, "error": None,
     }
 
