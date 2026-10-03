@@ -67,7 +67,7 @@
     if (body instanceof FormData) payload = body;
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     return fetch(API + path, { method: method, headers: headers, body: payload }).then(function (r) {
-      if (r.status === 401 && session && !opts.retried && path.indexOf('/auth/') !== 0) {
+      if (r.status === 401 && session && !opts.retried && !/^\/auth\/(login|register|refresh|logout|forgot-password|reset-password|verify-email)/.test(path)) {
         return doRefresh().then(function () { return api(method, path, body, { retried: true }); }, function () {
           clearSession(); showAuth(); throw new Error('Your session expired — please sign in again.');
         });
@@ -97,18 +97,49 @@
     $('authPassword').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     $('authError').style.display = 'none';
   }
-  function showReset(on) {
-    $('authForm').style.display = on ? 'none' : '';
-    $('resetForm').style.display = on ? '' : 'none';
-    $('forgotLink').style.display = on ? 'none' : '';
-    $('authError').style.display = 'none'; $('resetError').style.display = 'none';
-    $('authTitle').textContent = on ? 'Reset your password' : (authMode === 'login' ? 'Welcome back' : 'Create your account');
-    document.querySelector('.auth-tabs').style.display = on ? 'none' : '';
-    $('authSub').style.display = on ? 'none' : '';
-    if (on) { $('resetEmail').value = $('authEmail').value; $('resetEmail').focus(); }
+  // which password panel is showing: false (sign-in), 'email', 'code' or 'new'
+  function showReset(mode) {
+    var forms = { email: 'forgotForm', code: 'resetForm', 'new': 'newPwForm' };
+    $('authForm').style.display = mode ? 'none' : '';
+    Object.keys(forms).forEach(function (k) { $(forms[k]).style.display = mode === k ? '' : 'none'; });
+    $('forgotLink').style.display = mode ? 'none' : '';
+    ['authError', 'resetError', 'forgotError', 'forgotDone', 'newPwError'].forEach(function (id) { $(id).style.display = 'none'; });
+    $('authTitle').textContent = mode === 'new' ? 'Choose a new password' : mode ? 'Reset your password' : (authMode === 'login' ? 'Welcome back' : 'Create your account');
+    document.querySelector('.auth-tabs').style.display = mode ? 'none' : '';
+    $('authSub').style.display = mode ? 'none' : '';
+    if (mode === 'email') { $('forgotEmail').value = $('authEmail').value; $('forgotEmail').focus(); }
+    if (mode === 'code') { $('resetEmail').value = $('forgotEmail').value || $('authEmail').value; $('resetEmail').focus(); }
+    if (mode === 'new') $('newPw').focus();
   }
-  $('forgotLink').onclick = function () { showReset(true); };
-  $('resetBack').onclick = function () { showReset(false); };
+  $('forgotLink').onclick = function () { showReset('email'); };
+  $('useCodeLink').onclick = function () { showReset('code'); };
+  $('resetBack').onclick = $('forgotBack').onclick = $('newPwBack').onclick = function () { clearHashToken(); showReset(false); };
+  $('forgotForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = $('forgotSubmit'); btn.disabled = true; $('forgotError').style.display = 'none';
+    api('POST', '/auth/forgot-password', { email: $('forgotEmail').value.trim() }).then(function (j) {
+      $('forgotDone').textContent = unwrap(j).message; $('forgotDone').style.display = 'block';
+    }).catch(function (e2) { $('forgotError').textContent = e2.message; $('forgotError').style.display = 'block'; })
+      .finally(function () { btn.disabled = false; });
+  });
+  // links from emails arrive as #reset=TOKEN or #verify=TOKEN
+  var hashToken = (function () { var m = /^#(reset|verify)=([\w-]+)$/.exec(location.hash || ''); return m ? { kind: m[1], token: m[2] } : null; })();
+  // a link pasted into an already-open tab only changes the #part: start over so it's handled
+  window.addEventListener('hashchange', function () { if (/^#(reset|verify)=/.test(location.hash)) location.reload(); });
+  function clearHashToken() { hashToken = null; if (/^#(reset|verify)=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search); }
+  $('newPwForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = $('newPwError'), pw = $('newPw').value;
+    if (pw !== $('newPw2').value) { err.textContent = 'The two passwords are different.'; err.style.display = 'block'; return; }
+    if (!hashToken) { err.textContent = 'This reset link is incomplete. Please ask for a new one.'; err.style.display = 'block'; return; }
+    var btn = $('newPwSubmit'); btn.disabled = true; err.style.display = 'none';
+    api('POST', '/auth/reset-password-link', { token: hashToken.token, new_password: pw }).then(function () {
+      clearHashToken(); $('newPw').value = $('newPw2').value = '';
+      clearSession(); setAuthMode('login'); showReset(false);
+      toast('Password changed. Sign in with your new password.');
+    }).catch(function (e2) { err.textContent = e2.message; err.style.display = 'block'; })
+      .finally(function () { btn.disabled = false; });
+  });
   $('resetForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var err = $('resetError'), pw = $('resetPw').value;
@@ -144,6 +175,13 @@
     $('settingsEmail').textContent = 'Signed in as ' + (session.email || '');
     loadMeta().then(function () { showScreen(isNew ? 'profile' : (store('ascend_screen') || 'dashboard')); });
     if (isNew) toast('Account created — start by filling in your profile.');
+    checkVerified();
+  }
+  function checkVerified() {
+    get('/auth/me').then(function (m) {
+      $('verifyEmail').textContent = m.email;
+      $('verifyBanner').hidden = m.email_verified || !m.email_enabled;
+    }).catch(function () {});
   }
   $('logoutBtn').onclick = function () {
     var r = session && session.refresh;
@@ -930,5 +968,20 @@
   };
 
   // ---------------- boot ----------------
-  if (session && session.access) showApp(false); else { setAuthMode('login'); showAuth(); }
+  $('resendVerify').onclick = function () {
+    var b = this; b.disabled = true;
+    api('POST', '/auth/resend-verification').then(function () { toast('Confirmation email sent. Check your inbox and spam folder.'); })
+      .catch(fail).finally(function () { b.disabled = false; });
+  };
+  if (hashToken && hashToken.kind === 'reset') {
+    setAuthMode('login'); showAuth(); showReset('new');
+  } else {
+    if (hashToken && hashToken.kind === 'verify') {
+      var t = hashToken.token; clearHashToken();
+      api('POST', '/auth/verify-email', { token: t }).then(function () {
+        toast('Email confirmed — thank you!'); if (session && session.access) checkVerified();
+      }).catch(function (e) { toast(e.message, true); });
+    }
+    if (session && session.access) showApp(false); else { setAuthMode('login'); showAuth(); }
+  }
 })();

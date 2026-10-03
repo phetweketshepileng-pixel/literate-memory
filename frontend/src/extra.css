@@ -18,6 +18,9 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .apply-prompt .ap-job { font-size: 13px; color: var(--text-mid); margin: 4px 0 12px; }
 .apply-prompt .ap-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .kanban-card .mark-applied { margin-top: 8px; width: 100%; }
+.verify-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+  padding: 10px 14px; border: 1px solid var(--paper-line); border-left: 4px solid var(--leaf); border-radius: 8px; background: var(--paper-2); font-size: 13.5px; }
+.verify-banner[hidden] { display: none; }
 .link-btn { background: none; border: none; padding: 0; margin-top: 14px; color: var(--text-mid); text-decoration: underline; font-size: 13px; cursor: pointer; display: block; }
 .chip-x { border: none; background: none; color: var(--text-mid); padding: 0 0 0 6px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: default; }

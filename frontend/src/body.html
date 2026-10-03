@@ -32,8 +32,28 @@
       </form>
       <div class="note warn" id="authError" style="display:none;"></div>
       <button type="button" class="link-btn" id="forgotLink">Forgot password?</button>
+      <form id="forgotForm" style="display:none;">
+        <div class="small muted" style="margin-top:6px;">Enter the email you signed up with and we'll email you a link to choose a new password.</div>
+        <label class="field-label">Email</label>
+        <input type="email" id="forgotEmail" autocomplete="email" required>
+        <button class="btn btn-primary" style="width:100%; margin-top:18px;" type="submit" id="forgotSubmit">Email me a reset link</button>
+        <div class="note" id="forgotDone" style="display:none;"></div>
+        <div class="note warn" id="forgotError" style="display:none;"></div>
+        <button type="button" class="link-btn" id="useCodeLink">Have a reset code instead?</button>
+        <button type="button" class="link-btn" id="forgotBack">Back to sign in</button>
+      </form>
+      <form id="newPwForm" style="display:none;">
+        <div class="small muted" style="margin-top:6px;">Choose a new password for your account.</div>
+        <label class="field-label">New password</label>
+        <input type="password" id="newPw" autocomplete="new-password" required minlength="8">
+        <label class="field-label">New password again</label>
+        <input type="password" id="newPw2" autocomplete="new-password" required minlength="8">
+        <button class="btn btn-primary" style="width:100%; margin-top:18px;" type="submit" id="newPwSubmit">Save new password</button>
+        <div class="note warn" id="newPwError" style="display:none;"></div>
+        <button type="button" class="link-btn" id="newPwBack">Back to sign in</button>
+      </form>
       <form id="resetForm" style="display:none;" autocomplete="off">
-        <div class="small muted" style="margin-top:6px;">Enter your account email, the reset code you saved in Railway, and a new password.</div>
+        <div class="small muted" style="margin-top:6px;">For the site owner: enter the account email, the reset code saved in Railway, and a new password.</div>
         <label class="field-label">Email</label>
         <input type="email" id="resetEmail" autocomplete="email" required>
         <label class="field-label">Reset code</label>
@@ -98,6 +118,10 @@
     </div>
 
     <div class="content">
+      <div class="verify-banner" id="verifyBanner" hidden>
+        <span>Please confirm your email: we sent a link to <b id="verifyEmail"></b>. It lets you reset your password if you forget it.</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="resendVerify">Resend email</button>
+      </div>
 
       <!-- DASHBOARD -->
       <section class="screen active" id="screen-dashboard">
