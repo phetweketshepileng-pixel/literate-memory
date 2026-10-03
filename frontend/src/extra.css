@@ -304,3 +304,5 @@ label.btn { cursor: pointer; }
 .modal.privacy li, .modal.privacy p { font-size:13.5px; line-height:1.55; }
 .btn-danger { background:var(--brick-deep); color:#fff; border:1px solid var(--brick-deep); }
 .btn-danger:hover { background:var(--brick); }
+.closes { white-space:nowrap; }
+.closes.soon { color:var(--brick-deep); font-weight:600; }

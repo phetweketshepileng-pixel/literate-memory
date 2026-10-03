@@ -331,7 +331,15 @@
       '<ul>' + j.scam.reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
       '<div class="small">Never pay to apply, for training, or for a uniform. Don\'t send your ID or bank details until you\'ve checked the company is real. Real learnerships are free.</div></div>';
   }
-  function viaInline(j) { return j && j.via === 'adzuna' ? ' · <span class="via">' + ADZUNA_LINK + '</span>' : ''; }
+  function viaInline(j) {
+    if (!j) return '';
+    var out = j.via === 'adzuna' ? ' · <span class="via">' + ADZUNA_LINK + '</span>' : j.via === 'dpsa' ? ' · <span class="via">Government vacancy circular</span>' : '';
+    if (j.closing_date) {
+      var d = new Date(j.closing_date + 'T23:59:59'), days = Math.ceil((d - new Date()) / 864e5);
+      out += ' · <span class="closes' + (days <= 3 ? ' soon' : '') + '">Closes ' + esc(shortDate(j.closing_date)) + (days >= 0 && days <= 3 ? (days === 0 ? ' (today)' : ' (' + days + ' day' + (days === 1 ? '' : 's') + ' left)') : '') + '</span>';
+    }
+    return out;
+  }
 
   // Shared tooltip for every chart: positioned near the pointer or the focused bar.
   var tip = $('chartTip');
@@ -926,7 +934,7 @@
       jobCache[id] = j;
       var sal = j.salary_min || j.salary_max ? money(j.salary_min) + (j.salary_max ? '–' + money(j.salary_max) : '') : '';
       $('jobModalBody').innerHTML = '<h2 style="margin-top:4px;">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') + '</h2>' +
-        '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
+        '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.closing_date ? 'Closes ' + shortDate(j.closing_date) : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
         viaLine(j) + scamBox(j) + '<div id="matchBox"></div>' +
         (j.description ? '<div class="field-label">Description</div><div class="small" style="white-space:pre-wrap; max-height:220px; overflow:auto;">' + esc(j.description) + '</div>' : '') +
         '<div class="row" style="margin-top:18px;">' +
@@ -934,7 +942,7 @@
           '<button class="btn btn-ghost btn-sm" id="scoreBtn">Score my match</button>' +
           '<select id="cvVariant" style="width:auto;"><option value="ats">ATS-optimised</option><option value="recruiter_friendly">Recruiter-friendly</option></select>' +
           '<button class="btn btn-ghost btn-sm" id="tailorBtn">Tailor my CV</button>' +
-          (j.apply_url ? '<a class="btn btn-ghost btn-sm" id="applyOnSite" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">Apply on site ↗</a>' : '') +
+          (j.apply_url ? '<a class="btn btn-ghost btn-sm" id="applyOnSite" href="' + esc(j.apply_url) + '" target="_blank" rel="noopener noreferrer">' + (j.via === 'dpsa' ? 'Open the circular (PDF) ↗' : 'Apply on site ↗') + '</a>' : '') +
         '</div><div id="aiStatus" class="small" style="margin-top:12px;"></div>';
       showMatch(id);
       $('saveJobBtn').onclick = function () {

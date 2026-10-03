@@ -111,6 +111,11 @@ EMPLOYER_BOARDS = [  # (display name, platform, board id, industry)
     ("Clickatell", "workable", "clickatell", "IT & technology"),
     ("Cartrack", "workable", "cartrack", "Telematics & fleet"),
 ]
+# Government posts: the weekly DPSA Public Service Vacancy Circular (one PDF
+# per department). Read once a day; posts close on their own closing date.
+DPSA_SOURCE = "Government: DPSA vacancy circular"
+SOURCES[DPSA_SOURCE] = {"adapter_type": "dpsa_circular", "circulars": 3, "refresh_hours": 23.5}
+
 for name, platform, board, industry in EMPLOYER_BOARDS:
     SOURCES[f"Careers: {name}"] = {"adapter_type": "ats_board", "platform": platform, "board": board,
                                    "company": name, "industry": industry, "sa_only": True}
@@ -147,6 +152,10 @@ CLEANUP = [
     "UPDATE jobs SET description = trim(regexp_replace(regexp_replace(description, '<[^>]+>', ' ', 'g'), '&nbsp;|&amp;|&#39;|&quot;', ' ', 'g')) WHERE description LIKE '%<%'",
     # WWR titles look like 'Company: Role' with no author field
     "UPDATE jobs SET company = split_part(title, ': ', 1), title = substr(title, length(split_part(title, ': ', 1)) + 3) WHERE company IS NULL AND position(': ' in title) > 1",
+    # government posts close on the closing date printed in the circular
+    f"""UPDATE jobs SET is_active = false, closed_at = now() WHERE is_active
+         AND raw_payload->>'closing_date_iso' < to_char(current_date, 'YYYY-MM-DD')
+         AND source_id IN (SELECT id FROM job_sources WHERE name = '{DPSA_SOURCE}')""",
     # board jobs older than 40 days drop out of search (keeps the wider feed
     # lean); employer careers-page jobs stay while the employer still lists them
     """UPDATE jobs SET is_active = false, closed_at = now() WHERE is_active AND date_posted < current_date - 40

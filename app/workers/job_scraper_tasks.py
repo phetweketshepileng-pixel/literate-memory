@@ -17,6 +17,7 @@ from app.modules.job_discovery.adapters.api_feed_adapter import ApiFeedAdapter
 from app.modules.job_discovery.adapters.career_page_adapter import AtsCareerPageAdapter
 from app.modules.job_discovery.adapters.rss_feed_adapter import RssFeedAdapter
 from app.modules.job_discovery.adapters.ats_board_adapter import AtsBoardAdapter
+from app.modules.job_discovery.adapters.dpsa_adapter import DpsaCircularAdapter
 from app.modules.job_discovery.deduplication import find_duplicate, record_additional_source
 from app.modules.job_discovery.industry import classify_industry, industry_from_payload
 from app.modules.job_discovery.opportunity import classify_opportunity
@@ -30,6 +31,7 @@ ADAPTER_REGISTRY = {
     "rss_feed": RssFeedAdapter,
     "career_page": AtsCareerPageAdapter,
     "adzuna": AdzunaAdapter,
+    "dpsa_circular": DpsaCircularAdapter,  # government posts from the weekly DPSA vacancy circular
     "ats_board": AtsBoardAdapter,  # employer careers boards (Greenhouse, Lever, SmartRecruiters, Workable)
     # "search_discovery" intentionally omitted — its results route to a
     # separate onboarding queue, not this ingestion path (see

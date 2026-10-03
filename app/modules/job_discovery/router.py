@@ -262,6 +262,8 @@ def _source_group(source_name: str | None) -> str:
         return "SA job boards (via Adzuna)"
     if name.startswith("Careers:"):
         return "Employers' own careers pages"
+    if name.startswith("Government:"):
+        return "Government vacancy circular (DPSA)"
     if name:
         return "International remote boards"
     return "Other"
@@ -399,11 +401,20 @@ def _job_summary(job: Job, match_score: int) -> dict:
         "is_hidden_gem": job.is_hidden_gem,
         "competition_score": job.competition_score,
         "match_score": match_score,
-        "via": "adzuna" if "adzuna." in (job.apply_url or "") else None,
+        "via": _via(job),
+        "closing_date": (job.raw_payload or {}).get("closing_date_iso") if isinstance(job.raw_payload, dict) else None,
         "industry": job.industry,
         "opportunity": OPPORTUNITY_TYPES.get(job.opportunity_type) if job.opportunity_type else None,
         "scam": _scam(job),
     }
+
+
+def _via(job: Job) -> str | None:
+    if "adzuna." in (job.apply_url or ""):
+        return "adzuna"
+    if isinstance(job.raw_payload, dict) and job.raw_payload.get("via") == "dpsa":
+        return "dpsa"
+    return None
 
 
 def _scam(job: Job) -> dict | None:
