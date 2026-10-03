@@ -292,3 +292,15 @@ label.btn { cursor: pointer; }
   :root:not([data-theme="light"]) .btn-primary:hover { background: #1A5536; }
   :root:not([data-theme="light"]) .pill-moss { background: rgba(111,190,140,.16); color: var(--leaf); }
 }
+
+/* ---------- privacy ---------- */
+.consent-line { display:flex; align-items:flex-start; gap:8px; margin-top:14px; font-size:13px; line-height:1.4; }
+.consent-line input { width:auto; margin-top:2px; flex:none; }
+.link-inline { background:none; border:0; padding:0; color:var(--moss); text-decoration:underline; cursor:pointer; font:inherit; }
+.auth-foot { margin-top:14px; text-align:center; }
+.modal.privacy { max-width:640px; max-height:85vh; overflow-y:auto; }
+.modal.privacy h3 { font-size:14.5px; margin:16px 0 4px; }
+.modal.privacy ul { margin:4px 0 8px; padding-left:20px; }
+.modal.privacy li, .modal.privacy p { font-size:13.5px; line-height:1.55; }
+.btn-danger { background:var(--brick-deep); color:#fff; border:1px solid var(--brick-deep); }
+.btn-danger:hover { background:var(--brick); }

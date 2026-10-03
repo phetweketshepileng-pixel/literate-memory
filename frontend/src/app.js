@@ -94,6 +94,7 @@
     $('authSub').textContent = mode === 'login' ? 'Sign in to continue.' : 'It takes ten seconds.';
     $('authSubmit').textContent = mode === 'login' ? 'Sign in' : 'Create account';
     $('pwHint').style.display = mode === 'register' ? 'block' : 'none';
+    $('consentLine').style.display = mode === 'register' ? 'flex' : 'none';
     $('authPassword').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     $('authError').style.display = 'none';
   }
@@ -159,6 +160,9 @@
   $('authForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var email = $('authEmail').value.trim(), pw = $('authPassword').value;
+    if (authMode === 'register' && !$('privacyAgree').checked) {
+      $('authError').textContent = 'Please read and tick the Privacy notice box to create your account.'; $('authError').style.display = 'block'; return;
+    }
     var btn = $('authSubmit'); btn.disabled = true;
     api('POST', '/auth/' + authMode, { email: email, password: pw }).then(function (tok) {
       saveSession(tok, email); $('authPassword').value = ''; showApp(authMode === 'register');
@@ -187,6 +191,40 @@
     var r = session && session.refresh;
     (r ? api('POST', '/auth/logout', { refresh_token: r }).catch(function () {}) : Promise.resolve()).then(function () { clearSession(); showAuth(); setAuthMode('login'); });
   };
+
+  // ---------------- privacy: notice, download my data, delete account ----------------
+  var privacyContactLoaded = false;
+  document.addEventListener('click', function (e) {
+    if (!(e.target.closest && e.target.closest('[data-privacy]'))) return;
+    e.preventDefault(); openModal('privacyModal');
+    if (privacyContactLoaded) return;
+    api('GET', '/auth/site-info').then(function (j) {
+      var c = (unwrap(j) || {}).privacy_contact; if (!c) return; privacyContactLoaded = true;
+      document.querySelectorAll('.privacy-contact').forEach(function (el) {
+        el.textContent = ''; var a = document.createElement('a'); a.href = 'mailto:' + c; a.textContent = c; el.appendChild(a);
+      });
+    }).catch(function () {});
+  });
+  $('exportBtn').onclick = function () {
+    var b = this; b.disabled = true;
+    apiFile('/auth/export', {}).then(function (f2) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(f2.blob); a.download = f2.name;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast('Your data is downloading');
+    }).catch(fail).finally(function () { b.disabled = false; });
+  };
+  $('deleteAccBtn').onclick = function () { $('delPw').value = $('delConfirm').value = ''; $('delError').style.display = 'none'; openModal('deleteModal'); $('delPw').focus(); };
+  $('deleteForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = $('delError');
+    if ($('delConfirm').value.trim().toUpperCase() !== 'DELETE') { err.textContent = 'Type the word DELETE to confirm.'; err.style.display = 'block'; return; }
+    var b = $('delSubmit'); b.disabled = true; err.style.display = 'none';
+    api('POST', '/auth/delete-account', { password: $('delPw').value, confirm: 'DELETE' }).then(function () {
+      closeModal('deleteModal'); clearSession(); store('ascend_screen', '');
+      showAuth(); setAuthMode('login'); toast('Your account and all its information have been deleted.');
+    }).catch(function (e2) { err.textContent = e2.message; err.style.display = 'block'; })
+      .finally(function () { b.disabled = false; });
+  });
 
   // ---------------- theme ----------------
   (function () { var t = store('ascend_theme'); if (t) document.documentElement.setAttribute('data-theme', t); })();
@@ -734,8 +772,8 @@
     var go = function () { return fetch(API + path, { method: 'POST', headers: { 'Authorization': 'Bearer ' + session.access, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); };
     return go().then(function (r) { return r.status === 401 ? doRefresh().then(go, function () { return r; }) : r; }).then(function (r) {
       if (r.status === 401) { clearSession(); showAuth(); throw new Error('Your session expired — please sign in again.'); }
-      if (!r.ok) return r.json().catch(function () { return null; }).then(function (j) { throw new Error(j ? errMsg(j, r.status) : 'Could not make the PDF (' + r.status + ')'); });
-      var name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || 'CV.pdf';
+      if (!r.ok) return r.json().catch(function () { return null; }).then(function (j) { throw new Error(j ? errMsg(j, r.status) : 'Download failed (' + r.status + ')'); });
+      var name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || (/export/.test(path) ? 'ascend-my-data.json' : 'CV.pdf');
       return r.blob().then(function (b) { return { blob: b, name: name }; });
     });
   }

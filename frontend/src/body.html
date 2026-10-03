@@ -28,10 +28,14 @@
         <label class="field-label">Password</label>
         <input type="password" id="authPassword" autocomplete="current-password" required minlength="8">
         <div class="small muted" id="pwHint" style="display:none; margin-top:6px;">At least 8 characters.</div>
+        <label class="consent-line" id="consentLine" style="display:none;">
+          <input type="checkbox" id="privacyAgree"> <span>I have read and agree to the <button type="button" class="link-inline" data-privacy>Privacy notice</button></span>
+        </label>
         <button class="btn btn-primary" style="width:100%; margin-top:18px;" id="authSubmit" type="submit">Sign in</button>
       </form>
       <div class="note warn" id="authError" style="display:none;"></div>
       <button type="button" class="link-btn" id="forgotLink">Forgot password?</button>
+      <div class="auth-foot small muted"><button type="button" class="link-inline" data-privacy>Privacy notice</button> · Job seekers use Ascend for free.</div>
       <form id="forgotForm" style="display:none;">
         <div class="small muted" style="margin-top:6px;">Enter the email you signed up with and we'll email you a link to choose a new password.</div>
         <label class="field-label">Email</label>
@@ -418,6 +422,14 @@
           <div class="small" id="settingsEmail"></div>
         </div>
         <div class="panel" style="margin-bottom:16px;">
+          <div class="section-title">Your data</div>
+          <p class="small muted" style="margin-top:0;">You own your information. Read the <button type="button" class="link-inline" data-privacy>Privacy notice</button> to see what we keep and why.</p>
+          <div class="row" style="gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost btn-sm" id="exportBtn">Download my data</button>
+            <button type="button" class="btn btn-danger btn-sm" id="deleteAccBtn">Delete my account</button>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:16px;">
           <div class="section-title">Appearance</div>
           <div class="small muted">Theme follows your system by default — use the 🌙 button in the top bar to switch.</div>
         </div>
@@ -431,6 +443,71 @@
       </section>
 
     </div>
+  </div>
+</div>
+
+<!-- PRIVACY NOTICE -->
+<div class="overlay" id="privacyModal">
+  <div class="modal privacy">
+    <button class="modal-close" data-close="privacyModal" aria-label="Close">×</button>
+    <h2>Privacy notice</h2>
+    <p class="small muted">Last updated 3 October 2026. Written in plain language, as South Africa's Protection of Personal Information Act (POPIA) asks.</p>
+    <h3>Who we are</h3>
+    <p>Ascend is a free career tool for job seekers in South Africa. Questions about your information: <span class="privacy-contact">use the contact on this site</span>.</p>
+    <h3>What we collect</h3>
+    <ul>
+      <li>Your email address and password (the password is stored scrambled, so nobody can read it, not even us).</li>
+      <li>What you put in your profile and CV: name, contact details, work history, education, skills and the career you want.</li>
+      <li>Files you upload, such as your CV and certificates.</li>
+      <li>The jobs you save and apply for, and notes you add.</li>
+    </ul>
+    <p>We don't ask for your ID number, bank details, race, health or religion. Please don't put them in your CV on Ascend.</p>
+    <h3>Why we use it</h3>
+    <ul>
+      <li>To match you to jobs and show how well you fit.</li>
+      <li>To build and improve your CV, and to track your applications.</li>
+      <li>To send you account emails (confirming your email, resetting your password).</li>
+    </ul>
+    <p>We never sell your information, and we don't show you adverts.</p>
+    <h3>Who else sees it</h3>
+    <ul>
+      <li><b>Employers do not</b>, unless you send them your CV yourself.</li>
+      <li>Our service providers, only to run Ascend: Railway (hosting, in the United States) and Brevo (email, in the European Union). Their countries have data protection laws, and they may only use your information to provide their service to us.</li>
+      <li>If you switch on "Pooled analytics" in Settings, your outcomes are counted in anonymous totals of 5 or more people. Nobody can see yours.</li>
+    </ul>
+    <h3>How long we keep it</h3>
+    <p>For as long as you have an account. When you delete your account, your information is removed straight away. Backups are overwritten within about 30 days.</p>
+    <h3>Your rights</h3>
+    <ul>
+      <li>See everything we hold: Settings → <b>Download my data</b>.</li>
+      <li>Correct it: edit your Profile at any time.</li>
+      <li>Delete it: Settings → <b>Delete my account</b>.</li>
+      <li>Object or ask questions: email the contact above.</li>
+      <li>Complain to the Information Regulator: <a href="https://inforegulator.org.za" target="_blank" rel="noopener">inforegulator.org.za</a>.</li>
+    </ul>
+    <h3>Keeping it safe</h3>
+    <p>Connections to Ascend are encrypted. Never share your password, and remember: a real employer will never ask you to pay for a job.</p>
+  </div>
+</div>
+
+<!-- DELETE ACCOUNT -->
+<div class="overlay" id="deleteModal">
+  <div class="modal" style="max-width:460px;">
+    <button class="modal-close" data-close="deleteModal" aria-label="Close">×</button>
+    <h2>Delete your account?</h2>
+    <p>This removes your profile, CVs, uploaded files, saved jobs and applications <b>for good</b>. It can't be undone.</p>
+    <p class="small muted">Want a copy first? Use "Download my data" before you delete.</p>
+    <form id="deleteForm" autocomplete="off">
+      <label class="field-label">Your password</label>
+      <input type="password" id="delPw" autocomplete="current-password" required>
+      <label class="field-label">Type DELETE to confirm</label>
+      <input type="text" id="delConfirm" autocomplete="off" required>
+      <div class="note warn" id="delError" style="display:none;"></div>
+      <div class="row" style="gap:10px; margin-top:18px; justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" data-close="deleteModal">Cancel</button>
+        <button type="submit" class="btn btn-danger" id="delSubmit">Delete my account</button>
+      </div>
+    </form>
   </div>
 </div>
 

@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     BREVO_API_URL: str = "https://api.brevo.com/v3/smtp/email"
     # Where links in emails point (the website)
     APP_URL: str = "https://web-production-382435.up.railway.app"
+    # shown on the privacy notice as the contact for privacy questions
+    # (defaults to EMAIL_FROM when not set)
+    PRIVACY_CONTACT_EMAIL: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod

@@ -325,3 +325,90 @@ async def resend_verification(background: BackgroundTasks, user_id: UUID = Depen
         link = await _new_email_link(db, user, "verify")
         background.add_task(_send_verify_email, user.email, link)
     return {"data": {"message": "Confirmation email sent."}, "meta": {}, "error": None}
+
+
+# ===================== Privacy: site info, data export, account deletion (POPIA) =====================
+
+@router.get("/site-info")
+async def site_info():
+    """Public details the privacy notice shows (no sign-in needed)."""
+    return {"data": {"privacy_contact": settings.PRIVACY_CONTACT_EMAIL or settings.EMAIL_FROM or None},
+            "meta": {}, "error": None}
+
+
+def _jsonable(value):
+    import uuid as _uuid
+    from datetime import date as _date, datetime as _dt
+    from decimal import Decimal
+    if isinstance(value, (_dt, _date)):
+        return value.isoformat()
+    if isinstance(value, (_uuid.UUID, Decimal)):
+        return str(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return None
+    return value
+
+
+_EXPORT_SKIP_COLUMNS = {"password_hash", "token_hash"}
+
+
+@router.post("/export")
+async def export_my_data(user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """Everything Ascend holds about you, as one JSON file (POPIA right of access).
+    Uploaded files themselves can be downloaded from My Profile."""
+    from fastapi.responses import JSONResponse
+    from app.models import Base, DataRequest
+
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+    profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one_or_none()
+    out: dict = {"exported_at": datetime.now(UTC).isoformat(),
+                 "account": {c.name: _jsonable(getattr(user, c.key)) for c in User.__table__.columns
+                             if c.name not in _EXPORT_SKIP_COLUMNS}}
+    for table in Base.metadata.sorted_tables:
+        if table.name in ("users", "document_blobs", "refresh_tokens", "auth_email_tokens"):
+            continue
+        key = "profile_id" if "profile_id" in table.c else ("user_id" if "user_id" in table.c else None)
+        if table.name == "profiles":
+            key, owner = "user_id", user_id
+        elif key == "profile_id":
+            owner = profile.id if profile else None
+        elif key == "user_id":
+            owner = user_id
+        if not key or owner is None:
+            continue
+        rows = (await db.execute(table.select().where(table.c[key] == owner))).mappings().all()
+        if rows:
+            out[table.name] = [{k: _jsonable(v) for k, v in r.items() if k not in _EXPORT_SKIP_COLUMNS} for r in rows]
+    db.add(DataRequest(user_id=user_id, request_type="export", status="completed", completed_at=datetime.now(UTC)))
+    await db.commit()
+    return JSONResponse(out, headers={"Content-Disposition": 'attachment; filename="ascend-my-data.json"'})
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+    confirm: str
+
+
+@router.post("/delete-account", status_code=204)
+async def delete_account(payload: DeleteAccountRequest, user_id: UUID = Depends(get_current_user_id),
+                         db: AsyncSession = Depends(get_db)) -> None:
+    """Permanently deletes the account and everything linked to it (POPIA
+    right to deletion). Needs the password and the word DELETE."""
+    from sqlalchemy import delete, text as sql_text
+    from app.models import Document, DocumentBlob
+
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+    if payload.confirm.strip().upper() != "DELETE":
+        raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR", "message": "Type DELETE to confirm."})
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "That password is not right."})
+    profile = (await db.execute(select(Profile).where(Profile.user_id == user_id))).scalar_one_or_none()
+    if profile is not None:
+        paths = list((await db.execute(select(Document.storage_path).where(Document.profile_id == profile.id))).scalars())
+        if paths:  # file contents aren't linked by a foreign key, so remove them explicitly
+            await db.execute(delete(DocumentBlob).where(DocumentBlob.storage_path.in_(paths)))
+    await db.execute(sql_text("DELETE FROM activity_logs WHERE user_id = :u"), {"u": user_id})
+    # a plain DELETE lets Postgres cascade to the profile, CVs, applications,
+    # tokens etc. (ON DELETE CASCADE); the ORM would try to unlink them instead
+    await db.execute(delete(User).where(User.id == user_id))
+    await db.commit()
