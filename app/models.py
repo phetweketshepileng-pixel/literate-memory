@@ -143,6 +143,8 @@ class Profile(Base):
     # candidates with your background" per
     # ai-job-hunter-recruiter-intelligence.md section 1.
     primary_source_domain: Mapped[str | None] = mapped_column(String(30))
+    # the CV builder's saved answers (sections as JSON; see profile/cv_builder.py)
+    cv_builder: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -356,6 +358,9 @@ class Job(Base):
     is_syndicated: Mapped[bool] = mapped_column(server_default=text("true"))
     competition_score: Mapped[str | None] = mapped_column(String(10))
     industry: Mapped[str | None] = mapped_column(String(80))
+    # learnership / internship / graduate / apprenticeship / yes / entry (see opportunity.py)
+    opportunity_type: Mapped[str | None] = mapped_column(String(20))
+    entry_level: Mapped[bool | None] = mapped_column()  # NULL = not classified yet
     is_hidden_gem: Mapped[bool] = mapped_column(server_default=text("false"))
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

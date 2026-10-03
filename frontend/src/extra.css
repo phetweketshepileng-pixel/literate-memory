@@ -1,5 +1,5 @@
 /* ---------- Additions for the live app ---------- */
-select, input[type=number], input[type=email], input[type=password], input[type=date] {
+select, input[type=number], input[type=email], input[type=password], input[type=date], input[type=tel] {
   width: 100%; font-family: inherit; font-size: 13.5px; padding: 9px 11px; border-radius: var(--radius-s);
   border: 1px solid var(--paper-line); background: var(--paper); color: var(--text-dark);
 }
@@ -21,6 +21,35 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .verify-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
   padding: 10px 14px; border: 1px solid var(--paper-line); border-left: 4px solid var(--leaf); border-radius: 8px; background: var(--paper-2); font-size: 13.5px; }
 .verify-banner[hidden] { display: none; }
+/* CV builder */
+.cvb-intro { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.cvb-intro > div:first-child { flex: 1 1 380px; }
+.cvb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cvb-sec { margin-bottom: 14px; }
+.cvb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.cvb-field.wide, .cvb-grid > .sf-check { grid-column: 1 / -1; }
+.cvb-grid > .sf-check { margin-top: 12px; }
+.cvb-hint { font-size: 12px; color: var(--text-mid); margin-top: 5px; }
+.cvb-tip { font-size: 12.5px; color: var(--text-mid); background: var(--paper); border-left: 3px solid var(--leaf); padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0 4px; }
+.cvb-item { border: 1px solid var(--paper-line); border-radius: 8px; padding: 6px 14px 14px; margin-top: 10px; }
+.cvb-item-head { display: flex; justify-content: space-between; align-items: center; }
+.cvb-item-head .link-btn { margin-top: 6px; }
+.cvb-examples { display: grid; gap: 8px; margin-top: 10px; }
+.cvb-example { text-align: left; font-size: 12.5px; line-height: 1.45; color: var(--text-mid); background: var(--paper); border: 1px dashed var(--paper-line); border-radius: 8px; padding: 9px 12px; }
+.cvb-example:hover { border-color: var(--moss); color: var(--text-dark); }
+.cvb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cvb-chip { font-size: 12.5px; border: 1px solid var(--paper-line); background: var(--paper-2); color: var(--text-dark); border-radius: 999px; padding: 4px 11px; }
+.cvb-chip:hover { border-color: var(--moss); }
+@media (max-width: 640px) {
+  .cvb-grid { grid-template-columns: 1fr; }
+  .cvb-actions { width: 100%; }
+  .cvb-actions .btn { flex: 1; }
+  #screen-cvbuilder { padding-bottom: 40px; }
+}
+.opp-tag { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--moss-deep); background: rgba(47,143,93,.12);
+  border-radius: 999px; padding: 2px 9px; vertical-align: 1px; }
+:root[data-theme="dark"] .opp-tag { color: var(--leaf); background: rgba(111,190,140,.16); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .opp-tag { color: var(--leaf); background: rgba(111,190,140,.16); } }
 .link-btn { background: none; border: none; padding: 0; margin-top: 14px; color: var(--text-mid); text-decoration: underline; font-size: 13px; cursor: pointer; display: block; }
 .chip-x { border: none; background: none; color: var(--text-mid); padding: 0 0 0 6px; font-size: 13px; }
 .btn[disabled] { opacity: .55; cursor: default; }
@@ -184,7 +213,7 @@ body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; 
 .btn-moss { background: var(--moss-deep); color: #fff; }  /* white on deep moss: 6:1 contrast */
 .btn-moss:hover { background: #1A5536; }
 :root[data-theme="dark"] .btn-ghost { color: var(--text-dark); }
-input[type=text], input[type=number], input[type=email], input[type=password], input[type=date], select, textarea {
+input[type=text], input[type=number], input[type=email], input[type=password], input[type=date], input[type=tel], select, textarea {
   border-radius: 6px; min-height: 38px; transition: border-color .15s, box-shadow .15s; }
 input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav-item:focus-visible { outline: none; border-color: var(--moss); box-shadow: var(--focus); }
 label.field-label { margin: 12px 0 5px; }

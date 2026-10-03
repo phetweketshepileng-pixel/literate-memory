@@ -169,7 +169,7 @@
     }).finally(function () { btn.disabled = false; });
   });
 
-  function showAuth() { $('appView').style.display = 'none'; $('authView').style.display = 'flex'; }
+  function showAuth() { cv = null; $('appView').style.display = 'none'; $('authView').style.display = 'flex'; }
   function showApp(isNew) {
     $('authView').style.display = 'none'; $('appView').style.display = 'flex';
     $('settingsEmail').textContent = 'Signed in as ' + (session.email || '');
@@ -198,7 +198,7 @@
   };
 
   // ---------------- navigation ----------------
-  var titles = { dashboard: 'Dashboard', profile: 'My Profile', jobs: 'Job Search', applications: 'Applications', analytics: 'Analytics',
+  var titles = { dashboard: 'Dashboard', profile: 'My Profile', cvbuilder: 'CV Builder', jobs: 'Job Search', applications: 'Applications', analytics: 'Analytics',
     transition: 'Career Transition', interview: 'Interview Preparation', branding: 'Professional Brand', intelligence: 'Recruiter Intelligence', settings: 'Settings' };
   var loaders = {};
   function showScreen(name) {
@@ -361,8 +361,9 @@
 
   function recCard(j) {
     var meta = [j.company, j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.industry && j.industry !== 'Other' ? j.industry : ''].filter(Boolean).map(esc).join(' · ');
+    var opp = j.opportunity ? '<span class="opp-tag">' + esc(j.opportunity === 'Entry level' ? 'No experience needed' : j.opportunity) + '</span>' : '';
     return '<div class="rec"><div class="rec-score" title="Quick-fit score out of 100"><div class="n">' + esc(j.fit_score) + '</div><div class="bar"><i style="width:' + Math.max(0, Math.min(100, j.fit_score)) + '%"></i></div></div>' +
-      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button><div class="rec-meta">' + meta + viaInline(j) + '</div>' +
+      '<div class="rec-body"><button class="rec-title" data-job="' + esc(j.id) + '">' + esc(j.title) + '</button>' + opp + '<div class="rec-meta">' + meta + viaInline(j) + '</div>' +
       alsoIn(j) + (j.fit_reasons && j.fit_reasons.length ? '<div class="rec-why">' + j.fit_reasons.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
       '<div class="rec-actions"><button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View</button><button class="btn btn-moss btn-sm" data-save-job="' + esc(j.id) + '">Save</button></div></div>';
   }
@@ -574,6 +575,184 @@
     }).catch(fail);
   });
 
+  // ---------------- CV BUILDER ----------------
+  var cv = null, cvTimer = null, cvSaving = null;
+  var CV_KINDS = [['job', 'Job'], ['part-time', 'Part-time / holiday job'], ['volunteer', 'Volunteer'], ['informal', 'Self-employed / informal'],
+    ['project', 'Project'], ['learnership', 'Learnership'], ['internship', 'Internship']];
+  var SA_LANGUAGES = ['English', 'isiZulu', 'isiXhosa', 'Afrikaans', 'Sepedi', 'Setswana', 'Sesotho', 'Xitsonga', 'siSwati', 'Tshivenda', 'isiNdebele', 'SA Sign Language'];
+  var LANG_LEVELS = ['Basic', 'Good', 'Fluent', 'Home language'];
+  var STARTER_SKILLS = ['Customer service', 'Cash handling', 'Teamwork', 'Communication', 'Time management', 'Problem solving',
+    'MS Word', 'MS Excel', 'Data capturing', 'Sales', 'Stock control', 'Telephone etiquette', 'Leadership', 'Attention to detail'];
+  var SUMMARY_EXAMPLES = [
+    'Matriculant with strong communication skills and experience helping customers at a family business. Reliable, quick to learn and eager to start a career in [field].',
+    'Recent [qualification] graduate from [institution] with hands-on experience in [skill] through projects and volunteering. Looking for an internship or graduate programme in [field].'
+  ];
+  var BLANK = {
+    experience: { role: '', organisation: '', kind: 'job', location: '', start: '', end: '', current: false, bullets: [] },
+    education: { qualification: '', institution: '', year: '', status: 'completed', details: '' },
+    languages: { name: '', level: '' },
+    certificates: { name: '', issuer: '', year: '' },
+    references: { name: '', relationship: '', phone: '', email: '' }
+  };
+
+  function cvGet(path) { return path.split('.').reduce(function (o, k) { return o == null ? o : o[k]; }, cv); }
+  function cvSet(path, val) {
+    var ks = path.split('.'), o = cv;
+    for (var i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+    o[ks[ks.length - 1]] = val;
+  }
+  function f(label, path, opts) {  // one form field bound to cv[path]
+    opts = opts || {};
+    var v = cvGet(path), id = 'cvb-' + path.replace(/\./g, '-');
+    var attrs = ' id="' + id + '" data-k="' + path + '"' + (opts.lines ? ' data-lines="1"' : '') + (opts.csv ? ' data-csv="1"' : '') +
+      (opts.ph ? ' placeholder="' + esc(opts.ph) + '"' : '') + (opts.max ? ' maxlength="' + opts.max + '"' : '');
+    var input;
+    if (opts.select) {
+      input = '<select' + attrs + '>' + opts.select.map(function (o) { var val = Array.isArray(o) ? o[0] : o, lab = Array.isArray(o) ? o[1] : o;
+        return '<option value="' + esc(val) + '"' + (val === v ? ' selected' : '') + '>' + esc(lab) + '</option>'; }).join('') + '</select>';
+    } else if (opts.area) {
+      var text = opts.lines ? (v || []).join('\n') : (opts.csv ? (v || []).join(', ') : (v || ''));
+      input = '<textarea rows="' + (opts.rows || 3) + '"' + attrs + '>' + esc(text) + '</textarea>';
+    } else {
+      input = '<input type="' + (opts.type || 'text') + '"' + attrs + ' value="' + esc(opts.csv ? (v || []).join(', ') : (v || '')) + '">';
+    }
+    return '<div class="cvb-field' + (opts.wide ? ' wide' : '') + '"><label class="field-label" for="' + id + '">' + esc(label) + '</label>' + input + (opts.hint ? '<div class="cvb-hint">' + opts.hint + '</div>' : '') + '</div>';
+  }
+  function listBlock(key, title, addLabel, renderItem, tip) {
+    var items = cv[key] || [];
+    return '<div class="panel cvb-sec"><div class="panel-head"><div class="section-title" style="margin:0;">' + esc(title) + '</div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-add="' + key + '">+ ' + esc(addLabel) + '</button></div>' +
+      (tip ? '<div class="cvb-tip">' + tip + '</div>' : '') +
+      (items.length ? items.map(function (it, i) {
+        return '<div class="cvb-item"><div class="cvb-item-head"><span class="small muted">' + esc(title) + ' ' + (i + 1) + '</span>' +
+          '<button type="button" class="link-btn cvb-remove" data-remove="' + key + '.' + i + '">Remove</button></div><div class="cvb-grid">' + renderItem(i, it) + '</div></div>';
+      }).join('') : '<div class="small muted">Nothing added yet.</div>') + '</div>';
+  }
+  function renderCv() {
+    var p = 'personal.';
+    var html =
+      '<div class="panel cvb-sec"><div class="section-title">1. Your details</div><div class="cvb-grid">' +
+        f('Full name', p + 'full_name', { ph: 'e.g. Thandi Mokoena' }) + f('Phone', p + 'phone', { ph: 'e.g. 071 234 5678', type: 'tel' }) +
+        f('Email', p + 'email', { type: 'email' }) + f('Where you live', p + 'location', { ph: 'e.g. Soweto, Johannesburg' }) +
+        f('LinkedIn (optional)', p + 'linkedin', { ph: 'linkedin.com/in/…' }) + f("Driver's licence (optional)", p + 'drivers_licence', { ph: 'e.g. Code 8' }) +
+      '</div><div class="cvb-tip">Don\'t put your ID number on your CV. Employers only need it after an offer, and it protects you from identity fraud.</div></div>' +
+
+      '<div class="panel cvb-sec"><div class="section-title">2. About you</div>' +
+        f('A short introduction (2–3 sentences)', 'summary', { area: true, rows: 4, wide: true, max: 1200,
+          hint: 'Say who you are, your strongest skills, and the kind of job you want. Tap an example to start from it.' }) +
+        '<div class="cvb-examples">' + SUMMARY_EXAMPLES.map(function (x, i) { return '<button type="button" class="cvb-example" data-example="' + i + '">' + esc(x) + '</button>'; }).join('') + '</div></div>' +
+
+      listBlock('experience', 'Experience', 'Add experience', function (i, it) {
+        var k = 'experience.' + i + '.';
+        return f('Role / what you did', k + 'role', { ph: 'e.g. Cashier, Tutor, Volunteer' }) + f('Where', k + 'organisation', { ph: 'e.g. Family spaza shop' }) +
+          f('Type', k + 'kind', { select: CV_KINDS }) + f('Town (optional)', k + 'location') +
+          f('From', k + 'start', { ph: 'e.g. Jan 2024' }) +
+          (it.current ? '<div class="cvb-field"><label class="field-label">To</label><div class="small muted" style="padding:10px 0;">Present</div></div>' : f('To', k + 'end', { ph: 'e.g. Dec 2024' })) +
+          '<label class="sf-check cvb-field wide"><input type="checkbox" data-k="' + k + 'current"' + (it.current ? ' checked' : '') + '> I still do this</label>' +
+          f('What you did and achieved (one per line)', k + 'bullets', { area: true, lines: true, rows: 4, wide: true,
+            hint: 'Start each line with an action word: <i>Served</i>, <i>Handled</i>, <i>Organised</i>, <i>Helped</i>. Add numbers where you can, e.g. <i>Served 50+ customers a day</i>.' });
+      }, 'Never had a formal job? Add part-time or holiday work, helping at a family business, volunteering, church or community work, tutoring, or school projects.') +
+
+      listBlock('education', 'Education', 'Add education', function (i) {
+        var k = 'education.' + i + '.';
+        return f('Qualification', k + 'qualification', { ph: 'e.g. National Senior Certificate (Matric)' }) + f('School / college / university', k + 'institution') +
+          f('Year', k + 'year', { ph: 'e.g. 2023' }) + f('Status', k + 'status', { select: [['completed', 'Completed'], ['in_progress', 'Still studying']] }) +
+          f('Details (optional)', k + 'details', { wide: true, ph: 'e.g. Subjects: Maths 65%, English 72%' });
+      }) +
+
+      '<div class="panel cvb-sec"><div class="section-title">Skills</div>' +
+        f('Your skills (separate with commas)', 'skills', { csv: true, area: true, rows: 2, wide: true }) +
+        '<div class="cvb-hint">Tap to add:</div><div class="cvb-chips">' + STARTER_SKILLS.filter(function (s) {
+          return (cv.skills || []).map(function (x) { return x.toLowerCase(); }).indexOf(s.toLowerCase()) < 0; }).map(function (s) {
+          return '<button type="button" class="cvb-chip" data-skill="' + esc(s) + '">+ ' + esc(s) + '</button>'; }).join('') + '</div></div>' +
+
+      listBlock('languages', 'Languages', 'Add language', function (i) {
+        var k = 'languages.' + i + '.';
+        return f('Language', k + 'name', { select: [''].concat(SA_LANGUAGES) }) + f('Level', k + 'level', { select: [''].concat(LANG_LEVELS) });
+      }, 'Speaking more than one language is a real strength in South Africa. List them all.') +
+
+      listBlock('certificates', 'Certificates & courses', 'Add certificate', function (i) {
+        var k = 'certificates.' + i + '.';
+        return f('Name', k + 'name', { ph: 'e.g. First Aid Level 1' }) + f('From', k + 'issuer', { ph: 'e.g. St John' }) + f('Year', k + 'year');
+      }, 'Free online courses count too, e.g. from Microsoft Learn, Google or Coursera.') +
+
+      '<div class="panel cvb-sec"><div class="section-title">Achievements & activities</div>' +
+        f('One per line (optional)', 'achievements', { area: true, lines: true, rows: 3, wide: true,
+          hint: 'e.g. Class representative, sports team captain, choir member, academic awards.' }) + '</div>' +
+
+      '<div class="panel cvb-sec"><div class="section-title">References</div>' +
+        '<label class="sf-check"><input type="checkbox" data-k="references_on_request"' + (cv.references_on_request ? ' checked' : '') + '> Say "Available on request" (recommended)</label>' +
+        (cv.references_on_request ? '' : '<div style="margin-top:10px;">' + listBlock('references', 'Reference', 'Add reference', function (i) {
+          var k = 'references.' + i + '.';
+          return f('Name', k + 'name') + f('How they know you', k + 'relationship', { ph: 'e.g. Teacher, Manager, Pastor' }) + f('Phone', k + 'phone') + f('Email', k + 'email');
+        }, 'Ask people before you list them.') + '</div>') + '</div>';
+    $('cvbForm').innerHTML = html;
+  }
+  function cvStatus(t) { $('cvbStatus').textContent = t; }
+  function cvSaveSoon() {
+    cvStatus('Saving…'); clearTimeout(cvTimer);
+    cvTimer = setTimeout(cvSaveNow, 1200);
+  }
+  function cvSaveNow() {
+    clearTimeout(cvTimer);
+    cvSaving = api('PUT', '/profile/cv-builder', cv).then(function () { cvStatus('Saved'); }, function (e) { cvStatus('Not saved: ' + e.message); });
+    return cvSaving;
+  }
+  $('cvbForm').addEventListener('input', function (e) {
+    var el = e.target, k = el.getAttribute && el.getAttribute('data-k'); if (!k || !cv) return;
+    var v = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.hasAttribute('data-lines')) v = el.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (el.hasAttribute('data-csv')) v = el.value.split(/[,\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    cvSet(k, v); cvSaveSoon();
+    if (el.type === 'checkbox') renderCv();  // "I still do this" / references change the layout
+  });
+  $('cvbForm').addEventListener('change', function (e) { if (e.target.tagName === 'SELECT') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+  $('cvbForm').addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-add],[data-remove],[data-skill],[data-example]'); if (!t || !cv) return;
+    if (t.dataset.add) { cv[t.dataset.add].push(JSON.parse(JSON.stringify(BLANK[t.dataset.add]))); }
+    else if (t.dataset.remove) { var parts = t.dataset.remove.split('.'); cv[parts[0]].splice(Number(parts[1]), 1); }
+    else if (t.dataset.skill) { cv.skills = (cv.skills || []).concat([t.dataset.skill]); }
+    else if (t.dataset.example) { cv.summary = SUMMARY_EXAMPLES[Number(t.dataset.example)]; }
+    renderCv(); cvSaveSoon();
+    if (t.dataset.add) { var items = $('cvbForm').querySelectorAll('[data-add="' + t.dataset.add + '"]'); var sec = items[0] && items[0].closest('.cvb-sec');
+      var last = sec && sec.querySelectorAll('.cvb-item'); if (last && last.length) { var inp = last[last.length - 1].querySelector('input,select,textarea'); if (inp) inp.focus(); } }
+    if (t.dataset.example) { var s = $('cvb-summary'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }
+  });
+  // POST that returns a file, renewing an expired sign-in once (like api())
+  function apiFile(path, body) {
+    var go = function () { return fetch(API + path, { method: 'POST', headers: { 'Authorization': 'Bearer ' + session.access, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); };
+    return go().then(function (r) { return r.status === 401 ? doRefresh().then(go, function () { return r; }) : r; }).then(function (r) {
+      if (r.status === 401) { clearSession(); showAuth(); throw new Error('Your session expired — please sign in again.'); }
+      if (!r.ok) return r.json().catch(function () { return null; }).then(function (j) { throw new Error(j ? errMsg(j, r.status) : 'Could not make the PDF (' + r.status + ')'); });
+      var name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || 'CV.pdf';
+      return r.blob().then(function (b) { return { blob: b, name: name }; });
+    });
+  }
+  function cvBlanksLeft() {
+    if (/\[[^\]]+\]/.test(cv.summary || '')) { toast('Replace the [ ] parts in your introduction first, e.g. [field] → Customer service', true); var s = $('cvb-summary'); if (s) s.focus(); return true; }
+    return false;
+  }
+  $('cvbPdf').onclick = function () {
+    if (!cv || cvBlanksLeft()) return; var b = this; b.disabled = true; clearTimeout(cvTimer);
+    apiFile('/profile/cv-builder/pdf', cv).then(function (f2) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(f2.blob); a.download = f2.name;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      cvStatus('Saved'); toast('Your CV is downloading');
+    }).catch(fail).finally(function () { b.disabled = false; });
+  };
+  $('cvbMaster').onclick = function () {
+    if (!cv || cvBlanksLeft()) return; var b = this; b.disabled = true; clearTimeout(cvTimer);
+    api('POST', '/profile/cv-builder/use-as-master', cv).then(function (j) {
+      var d = unwrap(j), n = (d.skills_added || []).length;
+      cvStatus('Saved'); toast('This is now your CV in Ascend' + (n ? ' — ' + n + ' skill' + (n === 1 ? '' : 's') + ' added' : ''));
+    }).catch(fail).finally(function () { b.disabled = false; });
+  };
+  loaders.cvbuilder = function () {
+    if (cv) { renderCv(); return; }
+    get('/profile/cv-builder').then(function (d) { cv = d; renderCv(); cvStatus(''); })
+      .catch(function (e) { $('cvbForm').innerHTML = empty(esc(e.message)); });
+  };
+
   // ---------------- JOBS ----------------
   var jobPage = 1;
   function jobCard(j) {
@@ -582,12 +761,12 @@
     var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
-      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
+      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.opportunity ? '<span class="opp-tag">' + esc(j.opportunity === 'Entry level' ? 'No experience needed' : j.opportunity) + '</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
       alsoIn(j) + '</div><div class="job-side">' + score + '<button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>';
   }
   function searchParams() {
     var f = $('jobSearchForm'), q = [];
-    ['q', 'location', 'industry', 'salary_min', 'remote', 'posted_within_days'].forEach(function (n) {
+    ['q', 'location', 'experience', 'industry', 'salary_min', 'remote', 'posted_within_days'].forEach(function (n) {
       var v = (f.elements[n].value || '').trim(); if (v) q.push(n + '=' + encodeURIComponent(v));
     });
     if (f.elements.salary_min.value && !f.elements.include_no_salary.checked) q.push('include_no_salary=false');
@@ -600,6 +779,8 @@
     loadingInto('jobList'); $('jobCount').textContent = '';
     api('GET', '/jobs/search?' + q.join('&')).then(function (j) {
       j.data.forEach(function (x) { jobCache[x.id] = Object.assign(jobCache[x.id] || {}, x); });
+      // hidden gems only make sense above an unfiltered list
+      $('gemList').style.display = searchParams().length ? 'none' : '';
       var total = j.meta.total || 0, pages = Math.ceil(total / 20), filtered = searchParams().length > 0;
       $('jobCount').textContent = total ? total.toLocaleString('en-ZA') + ' job' + (total === 1 ? '' : 's') + (j.meta.postings > total ? ' (' + j.meta.postings.toLocaleString('en-ZA') + ' ads, repeats of the same job grouped)' : '') : '';
       $('jobList').innerHTML = j.data.length ? j.data.map(jobCard).join('') :
@@ -608,7 +789,7 @@
       $('jobPager').innerHTML = pages > 1 ? '<button class="btn btn-ghost btn-sm" ' + (jobPage <= 1 ? 'disabled' : '') + ' data-page="' + (jobPage - 1) + '">‹ Prev</button><span class="small muted">Page ' + jobPage + ' of ' + pages + '</span><button class="btn btn-ghost btn-sm" ' + (jobPage >= pages ? 'disabled' : '') + ' data-page="' + (jobPage + 1) + '">Next ›</button>' : '';
     }).catch(function (e) { $('jobList').innerHTML = empty(esc(e.message)); });
   }
-  ['industry', 'salary_min', 'remote', 'posted_within_days', 'include_no_salary'].forEach(function (n) {
+  ['experience', 'industry', 'salary_min', 'remote', 'posted_within_days', 'include_no_salary'].forEach(function (n) {
     $('jobSearchForm').elements[n].addEventListener('change', function () { searchJobs(1); });
   });
   $('jobClear').onclick = function () {
@@ -668,8 +849,17 @@
       sel.value = cur;
     }).catch(function () {});
   }
+  function loadOpportunities() {
+    get('/jobs/opportunities').then(function (d) {
+      var sel = $('jobExperience'), cur = sel.value, n = function (x) { return ' (' + x.toLocaleString('en-ZA') + ')'; };
+      sel.innerHTML = '<option value="">Any</option><option value="none">No experience needed' + n(d.no_experience_total) + '</option>' +
+        d.types.filter(function (t) { return t.value !== 'entry' && t.count; }).map(function (t) {
+          return '<option value="' + esc(t.value) + '">' + esc(t.label) + 's' + n(t.count) + '</option>'; }).join('');
+      sel.value = cur;
+    }).catch(function () {});
+  }
   loaders.jobs = function () {
-    loadIndustries();
+    loadIndustries(); loadOpportunities();
     searchJobs(jobPage);
     get('/jobs/hidden-gems').then(function (g) {
       $('gemList').innerHTML = g.length ? '<div class="section-title">💎 Hidden gems — posted directly, low competition</div>' + g.slice(0, 3).map(jobCard).join('') + '<div class="section-title" style="margin-top:18px;">All results</div>' : '';

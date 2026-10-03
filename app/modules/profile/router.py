@@ -348,3 +348,94 @@ async def delete_certification(
         raise HTTPException(status_code=404, detail={"code": "RESOURCE_NOT_FOUND", "message": "Certification not found"})
     await db.delete(row)
     await db.commit()
+
+
+# ===================== CV builder =====================
+
+async def _cv_prefill(db: AsyncSession, profile: Profile, user_id: UUID):
+    """A first draft from what the profile already knows."""
+    from app.models import User
+    from app.modules.profile.cv_builder import Certificate, CvData, Education as CvEducation, Personal
+
+    email = (await db.execute(select(User.email).where(User.id == user_id))).scalar_one()
+    skills = list((await db.execute(select(Skill.name).where(Skill.profile_id == profile.id))).scalars())
+    edu = (await db.execute(select(Education).where(Education.profile_id == profile.id))).scalars().all()
+    certs = (await db.execute(select(Certification).where(Certification.profile_id == profile.id))).scalars().all()
+    return CvData(
+        personal=Personal(full_name=profile.full_name or "", phone=profile.phone or "", email=email,
+                          location=(profile.location_preferences or [""])[0], linkedin=profile.linkedin_url or ""),
+        skills=skills[:30],
+        education=[CvEducation(qualification=e.qualification, institution=e.institution or "",
+                               year=str(e.end_date.year) if e.end_date else "",
+                               status="in_progress" if e.status == "in_progress" else "completed")
+                   for e in edu][:8],
+        certificates=[Certificate(name=c.name, issuer=c.issuer or "",
+                                  year=str(c.issued_date.year) if c.issued_date else "") for c in certs][:12],
+    )
+
+
+@router.get("/cv-builder")
+async def get_cv_builder(user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    from app.modules.profile.cv_builder import CvData
+
+    profile = await _get_owned_profile(db, user_id)
+    if profile.cv_builder:
+        return {"data": CvData.model_validate(profile.cv_builder).model_dump(), "meta": {"saved": True}, "error": None}
+    return {"data": (await _cv_prefill(db, profile, user_id)).model_dump(), "meta": {"saved": False}, "error": None}
+
+
+@router.put("/cv-builder")
+async def save_cv_builder(payload: dict, user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    from app.modules.profile.cv_builder import CvData
+
+    data = CvData.model_validate(payload)
+    profile = await _get_owned_profile(db, user_id)
+    profile.cv_builder = data.model_dump()
+    await db.commit()
+    return {"data": profile.cv_builder, "meta": {"saved": True}, "error": None}
+
+
+@router.post("/cv-builder/pdf")
+async def cv_builder_pdf(payload: dict, user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """Saves the answers and returns the CV as a PDF download."""
+    from app.modules.profile.cv_builder import CvData, file_name, render_pdf
+
+    data = CvData.model_validate(payload)
+    profile = await _get_owned_profile(db, user_id)
+    profile.cv_builder = data.model_dump()
+    await db.commit()
+    return Response(content=render_pdf(data), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{file_name(data)}"'})
+
+
+@router.post("/cv-builder/use-as-master")
+async def cv_builder_use_as_master(payload: dict, user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """Makes the built CV the master CV (used for skills and CV tailoring)."""
+    from app.core.storage import build_storage_path, save_document_bytes
+    from app.modules.profile.cv_builder import CvData, file_name, has_content, render_pdf, to_text
+    from app.modules.profile.cv_parsing import detect_skills
+
+    data = CvData.model_validate(payload)
+    if not has_content(data):
+        raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR",
+            "message": "Add your name and at least one section (profile, experience, education or skills) first."})
+    profile = await _get_owned_profile(db, user_id)
+    profile.cv_builder = data.model_dump()
+    name = file_name(data)
+    path = build_storage_path(str(profile.id), name)
+    await save_document_bytes(db, path, render_pdf(data))
+    for doc in (await db.execute(select(Document).where(
+            Document.profile_id == profile.id, Document.document_type == "master_cv", Document.deleted_at.is_(None)))).scalars():
+        doc.deleted_at = datetime.now(UTC)
+    text_ = to_text(data)
+    db.add(Document(profile_id=profile.id, document_type="master_cv", file_name=name, storage_path=path,
+                    mime_type="application/pdf", parsed_text=text_))
+    existing = {n.lower() for n in (await db.execute(select(Skill.name).where(Skill.profile_id == profile.id))).scalars()}
+    added = []
+    for skill in list(dict.fromkeys(data.skills + detect_skills(text_))):
+        if skill.lower() not in existing and len(skill) <= 100:
+            existing.add(skill.lower())
+            db.add(Skill(profile_id=profile.id, name=skill, source="cv_extracted"))
+            added.append(skill)
+    await db.commit()
+    return {"data": {"file_name": name, "skills_added": added}, "meta": {}, "error": None}

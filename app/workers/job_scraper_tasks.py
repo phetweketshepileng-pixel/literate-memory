@@ -19,6 +19,7 @@ from app.modules.job_discovery.adapters.rss_feed_adapter import RssFeedAdapter
 from app.modules.job_discovery.adapters.ats_board_adapter import AtsBoardAdapter
 from app.modules.job_discovery.deduplication import find_duplicate, record_additional_source
 from app.modules.job_discovery.industry import classify_industry, industry_from_payload
+from app.modules.job_discovery.opportunity import classify_opportunity
 from app.core.rate_limit import TokenBucketLimiter
 from app.models import Job, JobSource
 
@@ -83,6 +84,7 @@ async def _poll_source_async(source_id: str) -> dict:
             if not normalized.title:
                 continue  # unusable listing, skip rather than insert garbage
 
+            opportunity_type, entry_level = classify_opportunity(normalized.title, normalized.description)
             industry = classify_industry(
                 normalized.title, normalized.company,
                 industry_from_payload(normalized.raw_payload), normalized.industry,
@@ -118,6 +120,7 @@ async def _poll_source_async(source_id: str) -> dict:
                 existing.apply_url = normalized.apply_url
                 existing.raw_payload = normalized.raw_payload
                 existing.industry = industry
+                existing.opportunity_type, existing.entry_level = opportunity_type, entry_level
                 updated_count += 1
             else:
                 db.add(
@@ -139,6 +142,8 @@ async def _poll_source_async(source_id: str) -> dict:
                         # duplicate later turns up on another source
                         raw_payload=normalized.raw_payload,
                         industry=industry,
+                        opportunity_type=opportunity_type,
+                        entry_level=entry_level,
                     )
                 )
                 new_count += 1

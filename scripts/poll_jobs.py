@@ -8,7 +8,7 @@ import asyncio, json, os, sys
 from datetime import UTC, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from app.core.database import AsyncSessionLocal
 from app.models import JobSource
 from app.workers.job_scraper_tasks import _poll_source_async
@@ -26,7 +26,8 @@ SOURCES = {
 # Free tier: 250 requests/day, 1,000/week, 2,500/month (~80/day). Budget:
 #   role searches      <= 18 pages, twice a day   -> 36/day
 #   industry searches  <=  7 pages, once a day    ->  7/day
-#   every category     <= 33 pages + 1 lookup, daily -> 34/day
+#   entry-level        <=  5 pages, once a day    ->  5/day
+#   every category     <= 28 pages + 1 lookup, daily -> 29/day
 #   total              <= ~77/day, ~2,300/month (searches stop early on a short page)
 A = {"adapter_type": "adzuna", "country": "za", "max_days_old": 30}
 # Role searches come from what people list under "Desired roles" on their
@@ -36,12 +37,15 @@ INDUSTRY_SEARCHES = [  # industries Adzuna has no category for — refreshed dai
     ("government", None, 1), ("municipality", None, 1), ("call centre", None, 1),
 ]
 ROLE_REFRESH_HOURS, DAILY_REFRESH_HOURS = 11.5, 23.5
-CATEGORY_PAGE_BUDGET = 33
+CATEGORY_PAGE_BUDGET = 28
 # categories that get a 2nd page (the newest 100 jobs) when the budget allows
 PRIORITY_CATEGORIES = ("accounting-finance-jobs", "it-jobs", "customer-services-jobs", "admin-jobs",
                        "sales-jobs", "consultancy-jobs", "hr-jobs", "logistics-warehouse-jobs", "engineering-jobs")
 CATEGORY_PREFIX = "Adzuna SA category: "
-assert sum(p for *_, p in INDUSTRY_SEARCHES) <= 7
+ENTRY_LEVEL_SEARCHES = [  # jobs open to people without experience — refreshed daily
+    ("learnership", None, 2), ("internship", None, 2), ("graduate programme", None, 1),
+]
+assert sum(p for *_, p in INDUSTRY_SEARCHES) <= 7 and sum(p for *_, p in ENTRY_LEVEL_SEARCHES) <= 5
 
 
 def _adzuna_name(what, where):
@@ -55,6 +59,7 @@ def add_adzuna_searches(searches, hours):
 
 
 add_adzuna_searches(INDUSTRY_SEARCHES, DAILY_REFRESH_HOURS)
+add_adzuna_searches(ENTRY_LEVEL_SEARCHES, DAILY_REFRESH_HOURS)
 
 
 async def add_profile_role_searches(db):
@@ -195,6 +200,20 @@ async def backfill_industry(db):
     return len(rows)
 
 
+async def backfill_opportunity(db):
+    """Mark learnerships, internships and no-experience jobs saved before
+    that classification existed."""
+    from app.models import Job
+    from app.modules.job_discovery.opportunity import classify_opportunity
+    rows = (await db.execute(select(Job.id, Job.title, func.left(Job.description, 1500))
+                             .where(Job.is_active, Job.entry_level.is_(None)).limit(20000))).all()
+    for jid, title, desc in rows:
+        kind, entry = classify_opportunity(title, desc)
+        await db.execute(text("UPDATE jobs SET opportunity_type = :k, entry_level = :e WHERE id = :id"),
+                         {"k": kind, "e": entry, "id": jid})
+    return len(rows)
+
+
 async def main():
     from app.core.config import settings
     have_adzuna = bool(settings.ADZUNA_APP_ID and settings.ADZUNA_APP_KEY)
@@ -235,10 +254,11 @@ async def main():
         for q in CLEANUP:
             await db.execute(text(q))
         filled = await backfill_industry(db)
+        classified = await backfill_opportunity(db)
         await db.commit()
         n = (await db.execute(text("select count(*) from jobs where is_active"))).scalar()
         gems = (await db.execute(text("select count(*) from jobs where is_active and is_hidden_gem"))).scalar()
-    print("INDUSTRY_BACKFILLED", filled, flush=True)
+    print("INDUSTRY_BACKFILLED", filled, "OPPORTUNITY_BACKFILLED", classified, flush=True)
     print("ACTIVE_JOBS", n, "HIDDEN_GEMS", gems, flush=True)
 
 if __name__ == "__main__":

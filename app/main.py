@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
         allow_origins=["*"],  # tightened to the actual frontend origin in production
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Content-Disposition"],  # lets the browser see download file names
     )
 
     api_v1 = "/api/v1"

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models import Application, Job, JobMatch, JobSource, Profile, Skill
+from app.modules.job_discovery.opportunity import OPPORTUNITY_TYPES
 from app.modules.job_discovery.insights import FitInput, quick_fit, region_bucket
 from app.modules.job_discovery.search_helpers import (
     JobRow,
@@ -69,6 +70,7 @@ async def search_jobs(
     location: str | None = None,
     remote: bool | None = None,
     posted_within_days: int | None = Query(default=None, ge=1, le=90),
+    experience: str | None = Query(default=None, pattern="^(none|learnership|internship|graduate|apprenticeship|yes|entry)$"),
     date_posted_after: date | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -78,6 +80,10 @@ async def search_jobs(
     conds = _search_filters(q, title, location, remote, salary_min, include_no_salary, posted_within_days)
     if date_posted_after is not None:
         conds.append(Job.date_posted >= date_posted_after)
+    if experience == "none":          # anything open to people without experience
+        conds.append(Job.entry_level.is_(True))
+    elif experience:
+        conds.append(Job.opportunity_type == experience)
     if industry:
         conds.append(Job.industry == industry)
 
@@ -198,6 +204,25 @@ async def hidden_gems(
     }
 
 
+@router.get("/opportunities")
+async def opportunities(user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """How many learnerships, internships etc. are in the feed, for the filter."""
+    rows = (
+        await db.execute(
+            select(Job.opportunity_type, func.count()).where(Job.is_active.is_(True), Job.entry_level.is_(True))
+            .group_by(Job.opportunity_type)
+        )
+    ).all()
+    counts = {k: n for k, n in rows}
+    return {
+        "data": {
+            "no_experience_total": sum(counts.values()),
+            "types": [{"value": k, "label": OPPORTUNITY_TYPES[k], "count": counts.get(k, 0)} for k in OPPORTUNITY_TYPES],
+        },
+        "meta": {}, "error": None,
+    }
+
+
 @router.get("/industries")
 async def industries(user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
     """Industries in the current feed with job counts, for the search filter."""
@@ -312,11 +337,24 @@ async def recommended_jobs(
         seen = {j.id for j in jobs}
         jobs += [j for j in (await db.execute(titled)).scalars().all() if j.id not in seen]
 
+    new_to_work = profile.years_experience is not None and profile.years_experience < 2
+    if new_to_work:  # make sure learnerships/internships are in the running even without a title match
+        seen = {j.id for j in jobs}
+        entry = base.where(Job.entry_level.is_(True)).order_by(Job.date_posted.desc().nulls_last()).limit(600)
+        jobs += [j for j in (await db.execute(entry)).scalars().all() if j.id not in seen]
     scored = []
     for job in jobs:
         if job.id in in_pipeline:
             continue
         fit = quick_fit(job.title, job.description, job.location, job.is_remote, job.date_posted, prefs)
+        if new_to_work:
+            # first-time job seekers: favour jobs they can realistically get
+            if job.entry_level:
+                fit.score = min(100, fit.score + 15)
+                fit.reasons.append(OPPORTUNITY_TYPES.get(job.opportunity_type, "Open to people without experience")
+                                   if job.opportunity_type and job.opportunity_type != "entry" else "No experience needed")
+            elif job.entry_level is False:
+                fit.score = max(0, fit.score - 15)
         if fit.score >= 30:
             scored.append((fit.score, job.date_posted or date.min, job, fit))
     scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
@@ -358,6 +396,7 @@ def _job_summary(job: Job, match_score: int) -> dict:
         "match_score": match_score,
         "via": "adzuna" if "adzuna." in (job.apply_url or "") else None,
         "industry": job.industry,
+        "opportunity": OPPORTUNITY_TYPES.get(job.opportunity_type) if job.opportunity_type else None,
     }
 
 

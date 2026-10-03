@@ -80,6 +80,7 @@
     <nav class="nav-group">
       <button class="nav-item active" data-screen="dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
       <button class="nav-item" data-screen="profile"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>My Profile</button>
+      <button class="nav-item" data-screen="cvbuilder"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>CV Builder</button>
       <button class="nav-item" data-screen="jobs"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Job Search</button>
       <button class="nav-item" data-screen="applications"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Applications</button>
       <button class="nav-item" data-screen="analytics"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analytics</button>
@@ -180,6 +181,22 @@
         <div id="chartTip" class="chart-tip" role="tooltip" hidden></div>
       </section>
 
+      <!-- CV BUILDER -->
+      <section class="screen" id="screen-cvbuilder">
+        <div class="panel cvb-intro">
+          <div>
+            <div class="section-title" style="margin-bottom:4px;">Build a professional CV, free</div>
+            <div class="small muted">No CV yet, or not happy with yours? Fill in the sections below. Never had a formal job? That's fine: volunteering, helping at a family business, school leadership and projects all count. Your answers save automatically.</div>
+          </div>
+          <div class="cvb-actions">
+            <span class="small muted" id="cvbStatus"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="cvbPdf">Download PDF</button>
+            <button type="button" class="btn btn-primary btn-sm" id="cvbMaster">Use as my CV</button>
+          </div>
+        </div>
+        <div id="cvbForm"><div class="small muted"><span class="spinner"></span> Loading…</div></div>
+      </section>
+
       <!-- PROFILE -->
       <section class="screen" id="screen-profile">
         <div class="grid-2">
@@ -269,6 +286,9 @@
             <button class="btn btn-primary sf-go" type="submit">Search</button>
           </div>
           <div class="sf-row sf-filters">
+            <label class="sf-mini">Experience
+              <select name="experience" id="jobExperience"><option value="">Any</option><option value="none">No experience needed</option></select>
+            </label>
             <label class="sf-mini">Industry
               <select name="industry" id="jobIndustry"><option value="">All industries</option></select>
             </label>
