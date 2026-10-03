@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Secret code for the sign-in page's "Forgot password?" form. Set it as a
     # Railway variable (12+ characters); the form is disabled while empty.
     PASSWORD_RESET_CODE: str = ""
+    # Email (Brevo HTTP API; Railway Hobby blocks SMTP). See app/core/email.py.
+    BREVO_API_KEY: str = ""
+    EMAIL_FROM: str = ""
+    EMAIL_FROM_NAME: str = "Ascend"
+    BREVO_API_URL: str = "https://api.brevo.com/v3/smtp/email"
+    # Where links in emails point (the website)
+    APP_URL: str = "https://web-production-382435.up.railway.app"
 
     @field_validator("DATABASE_URL")
     @classmethod
