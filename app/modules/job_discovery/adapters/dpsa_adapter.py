@@ -40,18 +40,23 @@ HOW_TO_APPLY = ("Government posts are free to apply for. You need a completed Z8
                 "above exactly — late or incomplete applications are not considered.")
 HEADERS = {"User-Agent": "Ascend job alerts (free career tool for South African job seekers)"}
 
-_CIRCULAR_LINK = re.compile(r'href="([^"]*?/psvc/circular-(\d+)-of-(\d{4})/?)"', re.I)
-_PDF_LINK = re.compile(r'<a[^>]+href="([^"]+?/vacancies/\d{4}/\d+/[^"/]+\.pdf)"[^>]*>(.*?)</a>', re.I | re.S)
+# the circulars page quotes its links with ' and each circular page with " — accept both
+_CIRCULAR_LINK = re.compile(r"""href=["']([^"']*?circular-(\d+)-of-(\d{4})/?)["']""", re.I)
+_PDF_LINK = re.compile(r"""<a[^>]+href=["']([^"']+?/vacancies/\d{4}/\d+/[^"'/]+\.pdf)["'][^>]*>(.*?)</a>""", re.I | re.S)
 _TAGS = re.compile(r"<[^>]+>")
 
-LABELS = ("SALARY", "CENTRE", "REQUIREMENTS", "DUTIES", "ENQUIRIES", "APPLICATIONS", "FOR ATTENTION",
+LABELS = ("SALARY", "CENTRE", "REQUIREMENTS", "DUTIES", "DUTES", "ENQUIRIES", "APPLICATIONS", "FOR ATTENTION",
           "CLOSING DATE", "NOTE", "NOTES")
 _LABEL = re.compile(r"(?:^|\n)[ \t]*(" + "|".join(re.escape(l) for l in LABELS) + r")[ \t]*:[ \t]*", re.I)
 _POST = re.compile(r"(?:^|\n)[ \t]*POST[ \t]+(\d{1,3})[ \t]*/[ \t]*(\d{1,4})[ \t]*:?[ \t]*", re.I)
-_REF = re.compile(r"\bREF(?:ERENCE)?\.?\s*(?:NO|NUMBER)?\.?\s*:?\s*([\w/.\- ]{2,60}?)(?=\s*(?:\(|$|\n))", re.I)
-_DEPT_LINE = re.compile(r"^\s*((?:NATIONAL |PROVINCIAL )?DEPARTMENT OF [A-Z ,&'\-]+|OFFICE OF THE [A-Z ,&'\-]+"
-                        r"|PROVINCIAL ADMINISTRATION:?\s*[A-Z ,&'\-]+|[A-Z][A-Z ,&'\-]+ (?:COMMISSION|AGENCY|SECRETARIAT|"
-                        r"SCHOOL OF GOVERNMENT|ACADEMY|PRESIDENCY))\s*$")
+# "REF NO: 3/3/1/87/2026" — the number often wraps onto the next line
+_REF = re.compile(r"\bREF(?:ERENCE)?\.?\s*(?:NO|NUMBER)\.?\s*:?\s*([A-Z0-9][\w.\-]*(?:\s*/\s*[\w.\-]+)*)", re.I)
+_REF_START = re.compile(r"\bREF(?:ERENCE)?\.?\s*(?:NO|NUMBER)\b", re.I)
+_DEPT_LINE = re.compile(r"^\s*((?:NATIONAL )?DEPARTMENT OF [A-Z ,&'\-]+(?:\s*\([A-Z&]+\))?|OFFICE OF THE [A-Z ,&'\-]+"
+                        r"(?:\s*\([A-Z&]+\))?|[A-Z][A-Z ,&'\-]+ (?:COMMISSION|AGENCY|SECRETARIAT|SCHOOL OF GOVERNMENT|"
+                        r"ACADEMY|PRESIDENCY)(?:\s*\([A-Z&]+\))?)\s*$")
+_PROVINCE_LINE = re.compile(r"^\s*PROVINCIAL ADMINISTRATION\s*:?\s*([A-Z \-]+?)\s*$")
+_N_POSTS = re.compile(r"\(\s*X?\s*(\d+)\s+POSTS?\s*\)", re.I)
 _MONEY = re.compile(r"R\s?(\d{1,3}(?:[  ,]\d{3})+|\d{4,7})(?:\.\d{2})?")
 _DATE = re.compile(r"(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)"
                    r"\s+(\d{4})", re.I)
@@ -121,7 +126,7 @@ def _money(value: str) -> tuple[int | None, int | None]:
     if not nums:
         return None, None
     monthly = bool(re.search(r"per month|p\.?m\.?\b|monthly|stipend", value, re.I)) and not re.search(r"per annum|p\.?a\.?\b", value, re.I)
-    nums = [n * 12 if monthly else n for n in nums[:2]]
+    nums = [n * 12 if monthly else n for n in nums[:12]]  # several grades -> lowest to highest
     lo, hi = min(nums), max(nums)
     return lo, (hi if hi != lo else None)
 
@@ -136,75 +141,100 @@ def parse_date(value: str | None) -> date | None:
         return None
 
 
+# page numbers and section headings that land between posts
+_NOISE_LINES = re.compile(r"(?:\n[ \t]*(?:\d{1,4}|ANNEXURE [A-Z]{1,2}|OTHER POSTS|MANAGEMENT ECHELON|"
+                          r"PROVINCIAL ADMINISTRATION\s*:?[A-Z \-]*|(?:NATIONAL )?DEPARTMENT OF [A-Z ,&'\-]+(?:\s*\([A-Z&]+\))?)"
+                          r"[ \t]*(?=\n))+")
+
+
 def _fields(chunk: str) -> tuple[str, dict[str, str]]:
     """Split one post's text into (heading, {LABEL: value})."""
     parts = _LABEL.split(chunk)
     head, fields = parts[0], {}
     for i in range(1, len(parts) - 1, 2):
         key = parts[i].upper().replace("NOTES", "NOTE")
-        val = re.sub(r"[ \t]+", " ", parts[i + 1]).strip()
+        val = _NOISE_LINES.sub("\n", "\n" + parts[i + 1] + "\n")
+        val = re.sub(r"[ \t]+", " ", val).strip()
         fields[key] = (fields[key] + "\n" + val) if key in fields else val
     return head, fields
 
 
-def _department(text: str) -> str | None:
-    found = None
+def _headers(text: str) -> tuple[str | None, str | None]:
+    """Last department and province headings in `text`."""
+    dept = prov = None
     for line in text.splitlines():
+        m = _PROVINCE_LINE.match(line)
+        if m:
+            prov, dept = title_case(m.group(1)), None
+            continue
         m = _DEPT_LINE.match(line)
         if m and len(m.group(1)) < 120:
-            found = m.group(1)
-    return title_case(found) if found else None
+            name, abbr = re.match(r"(.*?)\s*(\([A-Z&]+\))?$", m.group(1)).groups()
+            dept = title_case(name) + (f" {abbr}" if abbr else "")  # keep "(DOA)" in capitals
+    return dept, prov
+
+
+def _company(dept: str | None, prov: str | None, default: str | None) -> str | None:
+    if dept and prov:
+        return f"{dept} ({prov})"
+    return dept or (f"{prov} provincial government" if prov else default)
 
 
 def parse_posts(text: str, default_department: str | None = None) -> list[dict]:
     """All posts in one department PDF's text."""
-    text = text.replace("\r", "\n").replace(" ", " ")
+    text = text.replace("\r", "\n").replace("\u00a0", " ")
     matches = list(_POST.finditer(text))
     posts = []
+    preamble = text[: matches[0].start()] if matches else text
     # section-level details (apply-to address, closing date) carried forward
-    _, top = _fields(text[: matches[0].start()] if matches else text)
+    _, top = _fields(preamble)
     carry = {k: top[k] for k in ("APPLICATIONS", "CLOSING DATE", "FOR ATTENTION") if k in top}
-    department = _department(text[: matches[0].start()] if matches else "") or default_department
+    dept, prov = _headers(preamble)
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         chunk = text[m.end(): end]
         head, fields = _fields(chunk)
-        # a department heading inside this chunk (after the post's own heading) starts the next posts' department
-        tail_dept = _department(chunk.split("\n", 1)[1] if "\n" in chunk else "")
-        first_line, _, rest = head.partition("\n")
-        heading = first_line
-        # titles sometimes wrap onto a second line before REF NO / the first label
-        if rest and not _REF.search(first_line) and _REF.search(first_line + " " + rest.split("\n", 1)[0]):
-            heading = first_line + " " + rest.split("\n", 1)[0]
+        heading = re.sub(r"\s+", " ", head).strip()
+        directorate = None
+        dm = re.search(r"\b(?:Directorate|Chief Directorate|Branch|Component|Unit|Sub-?directorate)\s*:\s*(.+)$", heading, re.I)
+        if dm:
+            directorate, heading = dm.group(0).strip(), heading[: dm.start()].strip()
         ref = _REF.search(heading)
-        title = heading[: ref.start()] if ref else heading
-        title = re.sub(r"\(\s*X?\s*\d+\s+POSTS?\s*\)|\bX\s*\d+\s+POSTS?\b", "", title, flags=re.I)
-        title = re.sub(r"\(\s*\)", "", title)
+        cut = _REF_START.search(heading)
+        title = heading[: cut.start()] if cut else heading
+        n_posts = _N_POSTS.search(heading)
+        title = _N_POSTS.sub("", title)
+        title = re.sub(r"\bX\s*\d+\s+POSTS?\b|\(\s*\)", "", title, flags=re.I)
         title = title_case(title)
         if not title or len(title) < 3:
             continue
         for k in ("APPLICATIONS", "CLOSING DATE", "FOR ATTENTION"):
             fields.setdefault(k, carry.get(k, ""))
-        n_posts = re.search(r"\(\s*X?\s*(\d+)\s+POSTS?\s*\)", heading, re.I)
+        salary = re.sub(r"\n\d{1,4}\n", "\n", "\n" + fields.get("SALARY", "") + "\n").strip()  # drop page numbers
         posts.append({
             "post": f"{m.group(1)}/{m.group(2)}",
             "title": title[:300],
-            "ref": ref.group(1).strip() if ref else None,
+            "ref": ref.group(1).replace(" ", "") if ref else None,
             "posts": int(n_posts.group(1)) if n_posts else 1,
-            "department": department,
-            "salary": fields.get("SALARY", ""),
+            "department": _company(dept, prov, default_department),
+            "province": prov,
+            "directorate": directorate,
+            "salary": salary,
             "centre": fields.get("CENTRE", ""),
             "requirements": fields.get("REQUIREMENTS", ""),
-            "duties": fields.get("DUTIES", ""),
+            "duties": fields.get("DUTIES") or fields.get("DUTES", ""),
             "enquiries": fields.get("ENQUIRIES", ""),
             "applications": fields.get("APPLICATIONS", ""),
             "for_attention": fields.get("FOR ATTENTION", ""),
             "closing_date": fields.get("CLOSING DATE", ""),
             "note": fields.get("NOTE", ""),
         })
-        # a department header or section-level details after this post apply to the next ones
-        if tail_dept:
-            department = tail_dept
+        # a new department / province heading inside this chunk applies to the posts after it
+        d2, p2 = _headers(chunk)
+        if p2:
+            prov, dept = p2, d2
+        elif d2:
+            dept = d2
     return posts
 
 
@@ -257,6 +287,7 @@ class DpsaCircularAdapter(JobSourceAdapter):
         closing = parse_date(p.get("closing_date"))
         sections = [
             ("Department", p.get("department")),
+            ("Unit", p.get("directorate")),
             ("Salary", p.get("salary")),
             ("Centre", p.get("centre")),
             ("Requirements", p.get("requirements")),
@@ -268,7 +299,10 @@ class DpsaCircularAdapter(JobSourceAdapter):
         ]
         desc = "\n\n".join(f"{k}: {v.strip()}" for k, v in sections if v and v.strip())
         desc += f"\n\n{HOW_TO_APPLY}\n\nSource: Public Service Vacancy Circular {p.get('circular')} of {p.get('year')} (post {p.get('post')}" + (f", ref {p['ref']}" if p.get("ref") else "") + ")."
-        centre = _first_line(p.get("centre", ""), 250) or "South Africa"
+        centre = _first_line(p.get("centre", ""), 200) or "South Africa"
+        prov = p.get("province")
+        if prov and prov.lower() not in centre.lower():
+            centre = f"{centre}, {prov}"
         return NormalizedJob(
             external_id=raw.external_id,
             title=p["title"],

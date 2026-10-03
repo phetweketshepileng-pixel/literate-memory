@@ -246,8 +246,10 @@ async def main():
         if have_adzuna:
             await sync_categories(db, now)
         await db.commit()
+        # a source that has never given us a job is retried on every run, whatever its refresh interval
+        with_jobs = set((await db.execute(text("SELECT DISTINCT source_id FROM jobs WHERE source_id IS NOT NULL"))).scalars())
         ids = [(s.name, str(s.id)) for s in (await db.execute(select(JobSource).where(JobSource.is_active))).scalars()
-               if _due(s, now)]
+               if _due(s, now) or s.id not in with_jobs]
     if not have_adzuna:
         print("NOTE Adzuna keys not set - skipping South African job searches (set ADZUNA_APP_ID and ADZUNA_APP_KEY)", flush=True)
         ids = [(n, i) for n, i in ids if not n.startswith("Adzuna")]
