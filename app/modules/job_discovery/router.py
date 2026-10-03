@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models import Application, Job, JobMatch, JobSource, Profile, Skill
 from app.modules.job_discovery.opportunity import OPPORTUNITY_TYPES
+from app.modules.job_discovery.scam_check import check_job
 from app.modules.job_discovery.insights import FitInput, quick_fit, region_bucket
 from app.modules.job_discovery.search_helpers import (
     JobRow,
@@ -191,6 +192,7 @@ async def hidden_gems(
         )
     ).scalars().all()
     prefs = await _fit_prefs(db, user_id)
+    jobs = [j for j in jobs if not ((c := check_job(j.title, j.company, j.description)) and c.level == "high")]
     scored = sorted(
         ((quick_fit(j.title, j.description, j.location, j.is_remote, j.date_posted, prefs).score, j.date_posted or date.min, j)
          for j in jobs),
@@ -346,6 +348,9 @@ async def recommended_jobs(
     for job in jobs:
         if job.id in in_pipeline:
             continue
+        scam = check_job(job.title, job.company, job.description)
+        if scam and scam.level == "high":
+            continue  # never recommend a likely scam
         fit = quick_fit(job.title, job.description, job.location, job.is_remote, job.date_posted, prefs)
         if new_to_work:
             # first-time job seekers: favour jobs they can realistically get
@@ -397,7 +402,13 @@ def _job_summary(job: Job, match_score: int) -> dict:
         "via": "adzuna" if "adzuna." in (job.apply_url or "") else None,
         "industry": job.industry,
         "opportunity": OPPORTUNITY_TYPES.get(job.opportunity_type) if job.opportunity_type else None,
+        "scam": _scam(job),
     }
+
+
+def _scam(job: Job) -> dict | None:
+    check = check_job(job.title, job.company, job.description)
+    return check.as_dict() if check else None
 
 
 def _job_detail(job: Job) -> dict:

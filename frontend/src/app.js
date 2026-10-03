@@ -282,6 +282,17 @@
     return '<div class="also-in">Also advertised in ' + a.slice(0, 3).map(esc).join('; ') + (a.length > 3 ? ' and ' + (a.length - 3) + ' more' : '') + '</div>';
   }
   function viaLine(j) { return j && j.via === 'adzuna' ? '<div class="via">' + ADZUNA_LINK + '</div>' : ''; }
+  function scamTag(j) {
+    if (!j || !j.scam) return '';
+    return j.scam.level === 'high' ? '<span class="scam-tag high" title="This advert shows signs of a scam">⚠ Possible scam</span>'
+                                   : '<span class="scam-tag" title="Check this advert carefully">⚠ Be careful</span>';
+  }
+  function scamBox(j) {
+    if (!j || !j.scam) return '';
+    return '<div class="scam-box ' + (j.scam.level === 'high' ? 'high' : '') + '"><b>' + (j.scam.level === 'high' ? '⚠ This advert shows signs of a scam' : '⚠ Check this advert carefully') + '</b>' +
+      '<ul>' + j.scam.reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
+      '<div class="small">Never pay to apply, for training, or for a uniform. Don\'t send your ID or bank details until you\'ve checked the company is real. Real learnerships are free.</div></div>';
+  }
   function viaInline(j) { return j && j.via === 'adzuna' ? ' · <span class="via">' + ADZUNA_LINK + '</span>' : ''; }
 
   // Shared tooltip for every chart: positioned near the pointer or the focused bar.
@@ -761,7 +772,7 @@
     var meta = [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : ''].filter(Boolean).map(esc).join(' · ');
     var score = j.match_score ? '<div class="match-score ' + (j.match_score >= 80 ? 'high' : j.match_score >= 60 ? 'mid' : 'low') + '">' + esc(j.match_score) + '%</div>' : '';
     return '<div class="job-card ' + cls + '"><div><div class="job-title">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') +
-      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + (j.opportunity ? '<span class="opp-tag">' + esc(j.opportunity === 'Entry level' ? 'No experience needed' : j.opportunity) + '</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
+      (j.is_hidden_gem ? ' <span class="pill pill-moss">💎 Hidden Gem</span>' : '') + scamTag(j) + (j.opportunity ? '<span class="opp-tag">' + esc(j.opportunity === 'Entry level' ? 'No experience needed' : j.opportunity) + '</span>' : '') + (j.industry && j.industry !== 'Other' ? '<span class="ind-tag">' + esc(j.industry) + '</span>' : '') + '</div><div class="job-meta">' + meta + viaInline(j) + '</div>' +
       alsoIn(j) + '</div><div class="job-side">' + score + '<button class="btn btn-ghost btn-sm" data-job="' + esc(j.id) + '">View details</button></div></div>';
   }
   function searchParams() {
@@ -878,7 +889,7 @@
       var sal = j.salary_min || j.salary_max ? money(j.salary_min) + (j.salary_max ? '–' + money(j.salary_max) : '') : '';
       $('jobModalBody').innerHTML = '<h2 style="margin-top:4px;">' + esc(j.title) + (j.company ? ' — ' + esc(j.company) : '') + '</h2>' +
         '<div class="small muted" style="margin-bottom:14px;">' + [j.location, j.is_remote && !/remote/i.test(j.location || '') ? 'Remote' : '', sal, j.date_posted ? 'Posted ' + shortDate(j.date_posted) : '', j.is_hidden_gem ? '💎 Hidden Gem' : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
-        viaLine(j) + '<div id="matchBox"></div>' +
+        viaLine(j) + scamBox(j) + '<div id="matchBox"></div>' +
         (j.description ? '<div class="field-label">Description</div><div class="small" style="white-space:pre-wrap; max-height:220px; overflow:auto;">' + esc(j.description) + '</div>' : '') +
         '<div class="row" style="margin-top:18px;">' +
           '<button class="btn btn-primary btn-sm" id="saveJobBtn">Save to pipeline</button>' +

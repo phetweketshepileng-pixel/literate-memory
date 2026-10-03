@@ -33,7 +33,18 @@ select, input[type=number], input[type=email], input[type=password], input[type=
 .cvb-tip { font-size: 12.5px; color: var(--text-mid); background: var(--paper); border-left: 3px solid var(--leaf); padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0 4px; }
 .cvb-item { border: 1px solid var(--paper-line); border-radius: 8px; padding: 6px 14px 14px; margin-top: 10px; }
 .cvb-item-head { display: flex; justify-content: space-between; align-items: center; }
-.cvb-item-head .link-btn { margin-top: 6px; }
+.cvb-item-head /* scam warnings */
+.scam-tag { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 9px; vertical-align: 1px;
+  color: #8A4B00; background: rgba(214,140,30,.16); }
+.scam-tag.high { color: var(--brick-deep); background: rgba(193,85,63,.14); }
+:root[data-theme="dark"] .scam-tag { color: #F2C27A; } :root[data-theme="dark"] .scam-tag.high { color: #F0A493; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .scam-tag { color: #F2C27A; } :root:not([data-theme="light"]) .scam-tag.high { color: #F0A493; } }
+.scam-box { border: 1px solid rgba(214,140,30,.45); border-left: 4px solid #D68C1E; background: rgba(214,140,30,.07); border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; font-size: 13px; }
+.scam-box.high { border-color: rgba(193,85,63,.5); border-left-color: var(--brick); background: rgba(193,85,63,.07); }
+.scam-box ul { margin: 6px 0 8px 18px; padding: 0; }
+.scam-box li { margin-bottom: 3px; }
+.safety-note { margin-top: 14px; font-size: 13px; padding: 10px 14px; border-radius: 8px; background: var(--paper-2); border: 1px solid var(--paper-line); border-left: 4px solid var(--brick); }
+.link-btn { margin-top: 6px; }
 .cvb-examples { display: grid; gap: 8px; margin-top: 10px; }
 .cvb-example { text-align: left; font-size: 12.5px; line-height: 1.45; color: var(--text-mid); background: var(--paper); border: 1px dashed var(--paper-line); border-radius: 8px; padding: 9px 12px; }
 .cvb-example:hover { border-color: var(--moss); color: var(--text-dark); }
