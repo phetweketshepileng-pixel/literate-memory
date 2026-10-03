@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # shown on the privacy notice as the contact for privacy questions
     # (defaults to EMAIL_FROM when not set)
     PRIVACY_CONTACT_EMAIL: str = ""
+    # where "Send feedback" messages go (defaults to PRIVACY_CONTACT_EMAIL, then EMAIL_FROM)
+    FEEDBACK_EMAIL: str = ""
 
     @field_validator("DATABASE_URL")
     @classmethod

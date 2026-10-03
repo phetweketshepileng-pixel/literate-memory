@@ -1,8 +1,9 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ascend — AI Career Operating System</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0F2A1D"><meta name="description" content="Free job search for South Africans: jobs, learnerships, government posts and a CV builder.">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png">
+<script>(function(){var c=navigator.connection;if(c&&c.saveData)return;var l=document.createElement("link");l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..600&display=swap";document.head.appendChild(l);})();</script>
 <style>
 :root {
   --ink: #0F2A1D;
@@ -23,7 +24,8 @@
   --brick-deep: #9C4230;
   --radius-s: 4px;
   --radius-m: 8px;
-  font-family: 'IBM Plex Sans', sans-serif;
+  /* the phone's own font: nothing to download */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 :root[data-theme="dark"] {
   --paper: #0B1712;
@@ -525,6 +527,10 @@ label.btn { cursor: pointer; }
 .btn-danger:hover { background:var(--brick); }
 .closes { white-space:nowrap; }
 .closes.soon { color:var(--brick-deep); font-weight:600; }
+.feedback-btn { margin-right:8px; }
+#fbMessage { width:100%; resize:vertical; }
+.grid-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 860px) { .grid-pair { grid-template-columns: minmax(0, 1fr); } }
 </style></head><body>
 <div id="toast"></div>
 <div id="applyPrompt" class="apply-prompt" role="dialog" aria-live="polite" hidden>
@@ -646,6 +652,7 @@ label.btn { cursor: pointer; }
         <h1 id="screenTitle">Dashboard</h1>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm feedback-btn" id="feedbackBtn" type="button">Feedback</button>
         <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
       </div>
     </div>
@@ -776,7 +783,7 @@ label.btn { cursor: pointer; }
             </div>
           </div>
         </div>
-        <div class="grid-3" style="margin-top:18px; grid-template-columns:1fr 1fr;">
+        <div class="grid-3 grid-pair" style="margin-top:18px;">
           <div class="panel">
             <div class="section-title">Education</div>
             <form id="eduForm">
@@ -1004,7 +1011,7 @@ label.btn { cursor: pointer; }
       <li>If you switch on "Pooled analytics" in Settings, your outcomes are counted in anonymous totals of 5 or more people. Nobody can see yours.</li>
     </ul>
     <h3>How long we keep it</h3>
-    <p>For as long as you have an account. When you delete your account, your information is removed straight away. Backups are overwritten within about 30 days.</p>
+    <p>For as long as you have an account. When you delete your account, your information is removed from Ascend straight away. Any backup copies kept by our hosting provider are deleted when those backups expire.</p>
     <h3>Your rights</h3>
     <ul>
       <li>See everything we hold: Settings → <b>Download my data</b>.</li>
@@ -1015,6 +1022,24 @@ label.btn { cursor: pointer; }
     </ul>
     <h3>Keeping it safe</h3>
     <p>Connections to Ascend are encrypted. Never share your password, and remember: a real employer will never ask you to pay for a job.</p>
+  </div>
+</div>
+
+<!-- FEEDBACK -->
+<div class="overlay" id="feedbackModal">
+  <div class="modal" style="max-width:480px;">
+    <button class="modal-close" data-close="feedbackModal" aria-label="Close">×</button>
+    <h2>Tell us what to fix</h2>
+    <p class="small muted">Something broken, confusing or missing? A job that looks like a scam? Every message is read.</p>
+    <form id="feedbackForm">
+      <textarea id="fbMessage" rows="5" maxlength="3000" required placeholder="What happened, and what did you expect?"></textarea>
+      <label class="consent-line"><input type="checkbox" id="fbContact"> <span>You may email me about this</span></label>
+      <div class="note warn" id="fbError" style="display:none;"></div>
+      <div class="row" style="gap:10px; margin-top:16px; justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" data-close="feedbackModal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="fbSubmit">Send</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1273,6 +1298,17 @@ label.btn { cursor: pointer; }
       closeModal('deleteModal'); clearSession(); store('ascend_screen', '');
       showAuth(); setAuthMode('login'); toast('Your account and all its information have been deleted.');
     }).catch(function (e2) { err.textContent = e2.message; err.style.display = 'block'; })
+      .finally(function () { b.disabled = false; });
+  });
+
+  // ---------------- feedback ----------------
+  $('feedbackBtn').onclick = function () { $('fbError').style.display = 'none'; openModal('feedbackModal'); $('fbMessage').focus(); };
+  $('feedbackForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = $('fbSubmit'); b.disabled = true; $('fbError').style.display = 'none';
+    api('POST', '/auth/feedback', { message: $('fbMessage').value, screen: store('ascend_screen') || '', may_contact: $('fbContact').checked })
+      .then(function () { $('fbMessage').value = ''; $('fbContact').checked = false; closeModal('feedbackModal'); toast('Thank you — your feedback was sent.'); })
+      .catch(function (e2) { $('fbError').textContent = e2.message; $('fbError').style.display = 'block'; })
       .finally(function () { b.disabled = false; });
   });
 
@@ -2282,4 +2318,5 @@ label.btn { cursor: pointer; }
     if (session && session.access) showApp(false); else { setAuthMode('login'); showAuth(); }
   }
 })();
-</script></body></html>
+</script>
+<script>if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost"))navigator.serviceWorker.register("/sw.js").catch(function(){});</script></body></html>

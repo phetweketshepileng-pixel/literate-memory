@@ -118,6 +118,7 @@
         <h1 id="screenTitle">Dashboard</h1>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm feedback-btn" id="feedbackBtn" type="button">Feedback</button>
         <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
       </div>
     </div>
@@ -248,7 +249,7 @@
             </div>
           </div>
         </div>
-        <div class="grid-3" style="margin-top:18px; grid-template-columns:1fr 1fr;">
+        <div class="grid-3 grid-pair" style="margin-top:18px;">
           <div class="panel">
             <div class="section-title">Education</div>
             <form id="eduForm">
@@ -476,7 +477,7 @@
       <li>If you switch on "Pooled analytics" in Settings, your outcomes are counted in anonymous totals of 5 or more people. Nobody can see yours.</li>
     </ul>
     <h3>How long we keep it</h3>
-    <p>For as long as you have an account. When you delete your account, your information is removed straight away. Backups are overwritten within about 30 days.</p>
+    <p>For as long as you have an account. When you delete your account, your information is removed from Ascend straight away. Any backup copies kept by our hosting provider are deleted when those backups expire.</p>
     <h3>Your rights</h3>
     <ul>
       <li>See everything we hold: Settings → <b>Download my data</b>.</li>
@@ -487,6 +488,24 @@
     </ul>
     <h3>Keeping it safe</h3>
     <p>Connections to Ascend are encrypted. Never share your password, and remember: a real employer will never ask you to pay for a job.</p>
+  </div>
+</div>
+
+<!-- FEEDBACK -->
+<div class="overlay" id="feedbackModal">
+  <div class="modal" style="max-width:480px;">
+    <button class="modal-close" data-close="feedbackModal" aria-label="Close">×</button>
+    <h2>Tell us what to fix</h2>
+    <p class="small muted">Something broken, confusing or missing? A job that looks like a scam? Every message is read.</p>
+    <form id="feedbackForm">
+      <textarea id="fbMessage" rows="5" maxlength="3000" required placeholder="What happened, and what did you expect?"></textarea>
+      <label class="consent-line"><input type="checkbox" id="fbContact"> <span>You may email me about this</span></label>
+      <div class="note warn" id="fbError" style="display:none;"></div>
+      <div class="row" style="gap:10px; margin-top:16px; justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" data-close="feedbackModal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="fbSubmit">Send</button>
+      </div>
+    </form>
   </div>
 </div>
 

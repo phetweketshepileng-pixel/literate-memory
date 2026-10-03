@@ -7,11 +7,15 @@ mkdir -p public
 echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
 echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
 echo '<title>Ascend — AI Career Operating System</title>'
-echo '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-echo '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">'
+echo '<meta name="theme-color" content="#0F2A1D"><meta name="description" content="Free job search for South Africans: jobs, learnerships, government posts and a CV builder.">'
+echo '<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png">'
+# heading font only (one small file), and skipped entirely when the phone is in data-saver mode
+echo '<script>(function(){var c=navigator.connection;if(c&&c.saveData)return;var l=document.createElement("link");l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500..600&display=swap";document.head.appendChild(l);})();</script>'
 echo '<style>'; cat src/base.css src/extra.css; echo '</style></head><body>'
 cat src/body.html
 echo "<script>window.ASCEND_API = \"$API\";</script>"
-echo '<script>'; cat src/app.js; echo '</script></body></html>'
+echo '<script>'; cat src/app.js; echo '</script>'
+# installable app + offline screen (see public/sw.js)
+echo '<script>if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost"))navigator.serviceWorker.register("/sw.js").catch(function(){});</script></body></html>'
 } > public/index.html
 wc -c public/index.html

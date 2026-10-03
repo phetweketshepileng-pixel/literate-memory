@@ -226,6 +226,17 @@
       .finally(function () { b.disabled = false; });
   });
 
+  // ---------------- feedback ----------------
+  $('feedbackBtn').onclick = function () { $('fbError').style.display = 'none'; openModal('feedbackModal'); $('fbMessage').focus(); };
+  $('feedbackForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var b = $('fbSubmit'); b.disabled = true; $('fbError').style.display = 'none';
+    api('POST', '/auth/feedback', { message: $('fbMessage').value, screen: store('ascend_screen') || '', may_contact: $('fbContact').checked })
+      .then(function () { $('fbMessage').value = ''; $('fbContact').checked = false; closeModal('feedbackModal'); toast('Thank you — your feedback was sent.'); })
+      .catch(function (e2) { $('fbError').textContent = e2.message; $('fbError').style.display = 'block'; })
+      .finally(function () { b.disabled = false; });
+  });
+
   // ---------------- theme ----------------
   (function () { var t = store('ascend_theme'); if (t) document.documentElement.setAttribute('data-theme', t); })();
   $('themeBtn').onclick = function () {

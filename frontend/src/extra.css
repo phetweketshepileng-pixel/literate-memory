@@ -306,3 +306,7 @@ label.btn { cursor: pointer; }
 .btn-danger:hover { background:var(--brick); }
 .closes { white-space:nowrap; }
 .closes.soon { color:var(--brick-deep); font-weight:600; }
+.feedback-btn { margin-right:8px; }
+#fbMessage { width:100%; resize:vertical; }
+.grid-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 860px) { .grid-pair { grid-template-columns: minmax(0, 1fr); } }

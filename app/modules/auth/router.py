@@ -412,3 +412,47 @@ async def delete_account(payload: DeleteAccountRequest, user_id: UUID = Depends(
     # tokens etc. (ON DELETE CASCADE); the ORM would try to unlink them instead
     await db.execute(delete(User).where(User.id == user_id))
     await db.commit()
+
+
+# ===================== Feedback: what real users tell us =====================
+
+FEEDBACK_PER_USER_PER_HOUR = 5
+FEEDBACK_PER_DAY = 100          # stays well inside the free email allowance
+_feedback_log: dict[str, list[float]] = {}
+
+
+def _feedback_allowed(key: str, now: float) -> bool:
+    user_sent = [t for t in _feedback_log.get(key, []) if now - t < 3600]
+    all_sent = [t for t in _feedback_log.get("*", []) if now - t < 86400]
+    _feedback_log[key], _feedback_log["*"] = user_sent, all_sent
+    if len(user_sent) >= FEEDBACK_PER_USER_PER_HOUR or len(all_sent) >= FEEDBACK_PER_DAY:
+        return False
+    user_sent.append(now)
+    all_sent.append(now)
+    return True
+
+
+class FeedbackRequest(BaseModel):
+    message: str
+    screen: str | None = None
+    may_contact: bool = False
+
+
+@router.post("/feedback", status_code=202)
+async def send_feedback(payload: FeedbackRequest, background: BackgroundTasks,
+                        user_id: UUID = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    """Emails a signed-in user's feedback to the site owner."""
+    message = payload.message.strip()[:3000]
+    if len(message) < 3:
+        raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR", "message": "Please write a few words."})
+    to = settings.FEEDBACK_EMAIL or settings.PRIVACY_CONTACT_EMAIL or settings.EMAIL_FROM
+    if not (email_configured() and to):
+        raise HTTPException(status_code=503, detail={"code": "UNAVAILABLE", "message": "Feedback isn't switched on yet."})
+    if not _feedback_allowed(str(user_id), time.monotonic()):
+        raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": "Thanks — you've sent a lot just now. Please try again later."})
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+    who = f"From: {user.email} (happy to be contacted)" if payload.may_contact else "From: a signed-in user (asked not to be contacted)"
+    screen = (payload.screen or "").strip()[:40]
+    body = f"{who}\nScreen: {screen or 'not given'}\n\n{message}"
+    background.add_task(send_email, to, "Ascend feedback" + (f" ({screen})" if screen else ""), body)
+    return {"data": {"message": "Thank you — your feedback was sent."}, "meta": {}, "error": None}
