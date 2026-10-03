@@ -50,6 +50,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="user")
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -57,6 +58,24 @@ class User(Base):
 
     profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False)
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthEmailToken(Base):
+    """One-time links sent by email: 'verify' (confirm address) or 'reset'
+    (forgotten password). Only a SHA-256 hash of the token is stored."""
+    __tablename__ = "auth_email_tokens"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('verify','reset')", name="ck_auth_email_tokens_purpose"),
+        Index("idx_auth_email_tokens_hash", "token_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(10), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefreshToken(Base):
