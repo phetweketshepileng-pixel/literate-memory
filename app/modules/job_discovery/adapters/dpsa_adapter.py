@@ -50,8 +50,8 @@ LABELS = ("SALARY", "CENTRE", "REQUIREMENTS", "DUTIES", "DUTES", "ENQUIRIES", "A
 _LABEL = re.compile(r"(?:^|\n)[ \t]*(" + "|".join(re.escape(l) for l in LABELS) + r")[ \t]*:[ \t]*", re.I)
 _POST = re.compile(r"(?:^|\n)[ \t]*POST[ \t]+(\d{1,3})[ \t]*/[ \t]*(\d{1,4})[ \t]*:?[ \t]*", re.I)
 # "REF NO: 3/3/1/87/2026" — the number often wraps onto the next line
-_REF = re.compile(r"\bREF(?:ERENCE)?\.?\s*(?:NO|NUMBER)\.?\s*:?\s*([A-Z0-9][\w.\-]*(?:\s*/\s*[\w.\-]+)*)", re.I)
-_REF_START = re.compile(r"\bREF(?:ERENCE)?\.?\s*(?:NO|NUMBER)\b", re.I)
+_REF = re.compile(r"\bREF?(?:ERENCE)?\.?\s*(?:NO|NUMBER)\.?\s*:?\s*([A-Z0-9][\w.\-]*(?:\s*/\s*[\w.\-]+)*)", re.I)
+_REF_START = re.compile(r"\bREF?(?:ERENCE)?\.?\s*(?:NO|NUMBER)\b", re.I)   # "RE NO" typo too
 _DEPT_LINE = re.compile(r"^\s*((?:NATIONAL )?DEPARTMENT OF [A-Z ,&'\-]+(?:\s*\([A-Z&]+\))?|OFFICE OF THE [A-Z ,&'\-]+"
                         r"(?:\s*\([A-Z&]+\))?|[A-Z][A-Z ,&'\-]+ (?:COMMISSION|AGENCY|SECRETARIAT|SCHOOL OF GOVERNMENT|"
                         r"ACADEMY|PRESIDENCY)(?:\s*\([A-Z&]+\))?)\s*$")
@@ -66,7 +66,7 @@ _MONTHS = {m: i for i, m in enumerate(["january", "february", "march", "april", 
 _ACRONYMS = {"ICT", "IT", "HR", "HRM", "HRD", "SMS", "MMS", "OSD", "CFO", "CEO", "CIO", "SCM", "EPWP", "GIS", "PA",
              "EAP", "OHS", "SHE", "ECD", "TVET", "NQF", "SAPS", "SANDF", "SARS", "DPSA", "MEC", "DG", "DDG", "CD",
              "HOD", "PMDS", "M&E", "ERP", "SAP", "PERSAL", "BAS", "LOGIS", "AI", "UNIX", "II", "III", "IV", "CAD",
-             "SITA", "PHC", "ICU", "OT", "ENT", "HIV", "TB", "STI", "EMS", "WIL", "VIP", "NHI", "PFMA", "MFMA"}
+             "SITA", "IFMS", "DEDT", "PHC", "ICU", "OT", "ENT", "HIV", "TB", "STI", "EMS", "WIL", "VIP", "NHI", "PFMA", "MFMA"}
 _SMALL = {"and", "of", "the", "for", "in", "on", "to", "a", "an", "at", "with", "or", "by"}
 
 
@@ -101,10 +101,12 @@ def title_case(s: str) -> str:
     if not s or (any(c.islower() for c in s) and not s.isupper()):
         return s
 
-    def word(w: str, first: bool) -> str:
+    def word(w: str, first: bool, in_brackets: bool) -> str:
         core = re.sub(r"[^\w&]", "", w).upper()
-        if core in _ACRONYMS:
+        if core in _ACRONYMS or re.fullmatch(r"[A-Z]", core):   # "Grade A - C"
             return w.upper()
+        if in_brackets and re.fullmatch(r"[A-Z&]{2,6}\)?[.,;:]?", w):   # short forms like "(SSS)"
+            return w
         low = w.lower()
         if not first and low in _SMALL:
             return low
@@ -112,11 +114,12 @@ def title_case(s: str) -> str:
 
     parts = re.split(r"(\s+|/|-|\()", s)
     out, first = [], True
-    for p in parts:
+    for i, p in enumerate(parts):
         if not p or re.fullmatch(r"\s+|/|-|\(", p):
             out.append(p or "")
             continue
-        out.append(word(p, first))
+        in_brackets = i > 0 and parts[i - 1] == "(" and p.endswith(")")
+        out.append(word(p, first, in_brackets))
         first = False
     return "".join(out)
 
@@ -202,6 +205,15 @@ def parse_posts(text: str, default_department: str | None = None) -> list[dict]:
         ref = _REF.search(heading)
         cut = _REF_START.search(heading)
         title = heading[: cut.start()] if cut else heading
+        # an ALL-CAPS title followed by a normal-case remark ("Re-advertisement, candidates who…",
+        # "Specialised Commercial Crime Unit"): the title is the capitals; keep the remark as a note
+        remark = None
+        words = title.split(" ")
+        if words and words[0].isupper():
+            for k, w in enumerate(words):
+                if k and re.search(r"[a-z]", w) and not re.fullmatch(r"\(?[A-Z][a-z]?\)?", w):
+                    remark, title = " ".join(words[k:]).strip(" ,;"), " ".join(words[:k])
+                    break
         n_posts = _N_POSTS.search(heading)
         title = _N_POSTS.sub("", title)
         title = re.sub(r"\bX\s*\d+\s+POSTS?\b|\(\s*\)", "", title, flags=re.I)
@@ -218,7 +230,7 @@ def parse_posts(text: str, default_department: str | None = None) -> list[dict]:
             "posts": int(n_posts.group(1)) if n_posts else 1,
             "department": _company(dept, prov, default_department),
             "province": prov,
-            "directorate": directorate,
+            "directorate": " · ".join(x for x in (directorate, remark) if x) or None,
             "salary": salary,
             "centre": fields.get("CENTRE", ""),
             "requirements": fields.get("REQUIREMENTS", ""),

@@ -175,3 +175,14 @@ def test_real_provincial_layout():
 def test_single_quoted_circular_links():
     idx = "<a href='/newsroom/psvc/circular-35-of-2026/'>35</a><a href='/newsroom/psvc/circular-34-of-2026/'>34</a>"
     assert [n for _, n, _ in d.circular_links(idx)] == [35, 34]
+
+
+def test_title_tidy_ups_seen_in_live_circulars():
+    t = "POST 34/01 : DEPUTY DIRECTOR: LABOUR CENTRE OPERATIONS Re-advertisement, candidates who applied must re-apply REF NO: HR4/4/10/01\nSALARY : R1 000 000 per annum\n"
+    (p,) = d.parse_posts(t)
+    assert p["title"] == "Deputy Director: Labour Centre Operations" and "Re-advertisement" in p["directorate"]
+    (q,) = d.parse_posts("POST 33/90 : DIRECTOR: SUPPLY CHAIN MANAGEMENT RE NO: DEDT 13/09\nSALARY : R1 per annum\n")
+    assert q["title"] == "Director: Supply Chain Management"
+    assert d.title_case("ENGINEER PRODUCTION GRADE A - C") == "Engineer Production Grade A - C"
+    assert d.title_case("ASSISTANT DIRECTOR: STUDENT SUPPORT SERVICES (SSS)") == "Assistant Director: Student Support Services (SSS)"
+    assert d.title_case("DEPUTY DIRECTOR: IFMS OPERATIONS") == "Deputy Director: IFMS Operations"
